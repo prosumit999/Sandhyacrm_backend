@@ -1,0 +1,1107 @@
+================================================================================
+  SANDHYA CRM — COMPLETE PROJECT PLAN
+  Software Company Internal Management System
+  Stack: Node.js + Express + MongoDB (Mongoose) | React + Tailwind (Frontend)
+================================================================================
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SECTION 1 — PROJECT OVERVIEW
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  NAME         : Sandhya CRM
+  PURPOSE      : Full internal management system for a software company.
+                 Tracks customers, software products, subscriptions, invoices,
+                 alerts, support tickets, communications, and team activity.
+  USERS        : SuperAdmin, Admin, Standard (role-based access)
+  BACKEND PORT : 5000
+  FRONTEND PORT: 3000
+  DATABASE     : MongoDB (local or Atlas)
+  AUTH         : JWT (access token 15min + refresh token 7d)
+  SMS PROVIDER : MSG91 or Twilio (WhatsApp + SMS)
+  FILE STORAGE : Cloudinary or local /uploads
+  CRON JOBS    : node-cron (runs renewal checks, uptime pings, alert generation)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SECTION 2 — FOLDER STRUCTURE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Backend/
+  ├── config/
+  │   ├── db.config.js              MongoDB connection
+  │   └── env.config.js             Environment variable loader + validator
+  │
+  ├── Models/
+  │   ├── user.schema.js            Users (SuperAdmin, Admin, Standard)
+  │   ├── Customer.model.js         Customer CRM records
+  │   ├── Softwares.schema.js       Software products built by company
+  │   ├── Subscription.schema.js    Customer ↔ Software link + renewal dates
+  │   ├── Invoice.schema.js         Billing records per subscription
+  │   ├── Alert.schema.js           Renewal, infra, marketing alerts
+  │   ├── Communication.schema.js   SMS/WhatsApp/Call log per customer
+  │   ├── SupportTicket.schema.js   Bug reports and feature requests
+  │   ├── AuditLog.schema.js        Immutable action history
+  │   ├── Notification.schema.js    In-app bell notifications per user
+  │   └── Tag.schema.js             Flexible labels for customers/softwares
+  │
+  ├── Controllers/
+  │   ├── auth.controller.js
+  │   ├── user.controller.js
+  │   ├── customer.controller.js
+  │   ├── software.controller.js
+  │   ├── subscription.controller.js
+  │   ├── invoice.controller.js
+  │   ├── alert.controller.js
+  │   ├── communication.controller.js
+  │   ├── ticket.controller.js
+  │   ├── notification.controller.js
+  │   ├── tag.controller.js
+  │   ├── dashboard.controller.js
+  │   ├── auditlog.controller.js
+  │   └── report.controller.js
+  │
+  ├── Routes/
+  │   ├── auth.route.js
+  │   ├── user.route.js
+  │   ├── customer.route.js
+  │   ├── software.route.js
+  │   ├── subscription.route.js
+  │   ├── invoice.route.js
+  │   ├── alert.route.js
+  │   ├── communication.route.js
+  │   ├── ticket.route.js
+  │   ├── notification.route.js
+  │   ├── tag.route.js
+  │   ├── dashboard.route.js
+  │   ├── auditlog.route.js
+  │   └── report.route.js
+  │
+  ├── Middlewares/
+  │   ├── auth.middleware.js         JWT verify + attach req.user
+  │   ├── role.permissions.js        Role-based access (SuperAdmin/Admin/Standard)
+  │   ├── permission.middleware.js   Granular permission check (e.g. customers.edit)
+  │   ├── audit.middleware.js        Auto-log all mutating requests to AuditLog
+  │   └── upload.middleware.js       Multer config for file uploads
+  │
+  ├── Services/
+  │   ├── sms.service.js             MSG91/Twilio SMS + WhatsApp sender
+  │   ├── notification.service.js    Create in-app notifications
+  │   ├── invoice.service.js         Generate invoice number + PDF
+  │   ├── alert.service.js           Create and dispatch alerts
+  │   ├── uptime.service.js          Ping software URLs, update uptimeStatus
+  │   ├── email.service.js           Nodemailer for email alerts (optional)
+  │   └── auditlog.service.js        Helper to write audit log entries
+  │
+  ├── Jobs/                          Cron jobs (node-cron)
+  │   ├── renewal.job.js             Daily: find subscriptions due in 30/7/1 days
+  │   ├── infra.job.js               Daily: check domain/hosting/SSL expiry dates
+  │   ├── uptime.job.js              Every 15min: ping all live software URLs
+  │   ├── invoice.job.js             Daily: mark overdue invoices
+  │   └── index.js                   Register and start all cron jobs
+  │
+  ├── Utils/
+  │   ├── response.util.js           Standard API response wrapper
+  │   ├── pagination.util.js         Reusable pagination + filter helper
+  │   ├── date.util.js               Date diff, format, expiry calculators
+  │   └── invoiceNumber.util.js      Auto-generate INV-YYYY-XXXX
+  │
+  ├── Seeds/
+  │   ├── create-superadmin.js       (already exists)
+  │   └── create-admin.js            (already exists)
+  │
+  ├── .env
+  ├── package.json
+  └── server.js
+
+  Frontend/
+  ├── src/
+  │   ├── pages/                     One folder per module
+  │   ├── components/                Reusable UI components
+  │   ├── services/                  Axios API calls
+  │   ├── store/                     State management (Zustand or Redux)
+  │   ├── hooks/                     Custom React hooks
+  │   └── utils/                     Date formatters, currency formatters
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SECTION 3 — ALL SCREENS & PAGES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ── AUTH ────────────────────────────────────────────────────────────────────
+
+  [1] /login
+      - Email + Password fields
+      - JWT stored in httpOnly cookie
+      - Redirect to /dashboard on success
+      - "Forgot password" link (sends reset email)
+
+  [2] /forgot-password
+      - Enter email → receive reset link
+
+  [3] /reset-password/:token
+      - New password + confirm password
+
+  ── DASHBOARD ───────────────────────────────────────────────────────────────
+
+  [4] /dashboard
+      Widgets row 1 (KPI cards):
+        - Total Active Customers
+        - Monthly Revenue (current month invoices paid)
+        - Pending Dues (subscriptions overdue)
+        - Open Support Tickets
+        - Softwares Live / Broken count
+
+      Widgets row 2 (alerts preview):
+        - Upcoming Renewals (next 7 days) — list with customer name, software, days left
+        - Infrastructure Expiries — domain/hosting/SSL due in 30 days
+        - Broken Software URLs — red badge count
+
+      Widgets row 3 (activity):
+        - Recent Communications (last 5 SMS/calls)
+        - Recent Invoices (last 5 with status badge)
+        - Quick Actions: [Add Customer] [Add Software] [Create Invoice] [Send Alert]
+
+      Role visibility:
+        - SuperAdmin: sees all widgets including team activity
+        - Admin: sees all except audit logs
+        - Standard: sees only their assigned customers
+
+  ── CUSTOMERS ───────────────────────────────────────────────────────────────
+
+  [5] /customers
+      - Data table: Name, Phone, Business, Softwares count, Status badge,
+                    Renewal status, Assigned to, Actions
+      - Filters: Status (Active/Expired/Lead/Suspended), Source, Priority,
+                 Tag, Assigned User, Renewal this month
+      - Search: by name, phone, email, business name
+      - Sort: by name, renewal date, created date
+      - Pagination: 20 per page
+      - Export to CSV button (permission: reports.export)
+      - [+ Add Customer] button
+
+  [6] /customers/new
+      Form fields:
+        - Name (required)
+        - Email (required, unique)
+        - Phone (required)
+        - WhatsApp (optional, defaults to phone)
+        - Business Name
+        - City, State, Country
+        - Source (dropdown: Referral/Instagram/Facebook/Google/WalkIn/Other)
+        - Priority (dropdown: Normal/High/VIP)
+        - GST Number
+        - Tags (multi-select, searchable)
+        - Assigned Staff (dropdown of Users)
+        - Notes (textarea)
+        - Document upload (agreement/PO) — max 5 files
+      On submit: creates Customer + writes AuditLog
+
+  [7] /customers/:id
+      Customer profile page. Tabs:
+
+      TAB 1 — Overview
+        - All fields from customer record (editable inline)
+        - Active subscriptions list with renewal dates + status
+        - Quick stats: total paid, total due, tickets open
+
+      TAB 2 — Subscriptions
+        - List of all subscriptions (active, expired, cancelled)
+        - Per subscription: Software name, buy date, renewal date,
+          amount, billing cycle, payment status, reminderSent flags
+        - [+ Add Subscription] button → opens modal
+
+      TAB 3 — Invoices
+        - List of all invoices for this customer
+        - Per invoice: invoice#, software, amount, status, date
+        - [View PDF] button
+        - [Mark as Paid] button (permission: invoices.markPaid)
+        - [+ Generate Invoice] button
+
+      TAB 4 — Communications
+        - Chronological timeline of all SMS/WhatsApp/calls
+        - Each entry: channel icon, direction, message, delivery status, date
+        - [+ Log Communication] button (manual entry)
+        - [Send SMS/WhatsApp] button → opens message composer
+
+      TAB 5 — Support Tickets
+        - List of tickets raised by this customer
+        - Per ticket: TKT#, title, software, priority, status, assigned to, date
+        - [+ New Ticket] button
+
+      TAB 6 — Activity Log
+        - Full AuditLog for this customer record
+        - Who changed what, when, before/after values
+
+  ── SOFTWARES ───────────────────────────────────────────────────────────────
+
+  [8] /softwares
+      - Grid cards or table: Software name, type badge, status badge (Live/Broken),
+        customer count, domain expiry, hosting expiry, uptime %
+      - Filters: Type (Web/Mobile/Desktop/SAAS), Status, Built For, Developer
+      - Sort: by name, expiry date, customer count
+      - [+ Add Software] button
+
+  [9] /softwares/new
+      Form fields:
+        - Name (required)
+        - Type (required: Web/Mobile/Desktop/SAAS/API/PAAS)
+        - Description
+        - Price (required)
+        - Billing Cycle
+        - Built For (Client/SAAS/Internal)
+        - Tech Stack (multi-input tags: React, Node.js, MongoDB…)
+        - Version
+        - Developer (user dropdown)
+        - Managed By (user dropdown)
+        - Live URL
+        - Play Store URL
+        - App Store URL
+        - Download URL
+        - Hosting Provider + Hosting Expiry Date
+        - Domain Provider + Domain Expiry Date
+        - SSL Expiry Date
+        - Tags (multi-select)
+        - Status (Live/Development/Paused)
+
+  [10] /softwares/:id
+       Software detail page. Tabs:
+
+       TAB 1 — Overview
+         - All software fields (editable)
+         - Uptime status badge + last checked time + 30-day uptime %
+         - Quick stats: active customers, total revenue generated, open tickets
+
+       TAB 2 — Customers
+         - List of customers who have an active subscription to this software
+         - Per customer: name, phone, renewal date, payment status
+         - Click customer → goes to /customers/:id
+
+       TAB 3 — Infrastructure
+         - Domain: provider, expiry date, days remaining (color coded)
+         - Hosting: provider, expiry date, days remaining
+         - SSL: expiry date, days remaining
+         - Uptime history log (last 10 checks: timestamp, status, response)
+         - [Check Now] button → triggers manual uptime ping
+
+       TAB 4 — Tickets
+         - All support tickets for this software
+         - Filters: status, priority
+
+       TAB 5 — Activity Log
+         - AuditLog entries for this software record
+
+  ── SUBSCRIPTIONS ───────────────────────────────────────────────────────────
+
+  [11] /subscriptions
+       - Master list of all subscriptions across all customers
+       - Columns: Customer, Software, Buy Date, Renewal Date, Amount,
+                  Billing Cycle, Payment Status, Subscription Status
+       - Filters: status, payment status, billing cycle, renewal this month,
+                  renewal in 7 days, overdue
+       - Sort: by renewal date (default: soonest first)
+       - [+ Add Subscription] button
+
+  [12] Subscription modal (opened from customer profile or /subscriptions)
+       - Customer (auto-filled if opened from customer profile)
+       - Software (dropdown)
+       - Buy Date
+       - Renewal Date
+       - Amount Charged (pre-fills from software.price, editable)
+       - Billing Cycle
+       - Payment Status
+       - Auto Renew toggle
+       - Grace Period Days
+       - Notes
+       On submit: creates Subscription + optionally creates Invoice
+
+  ── INVOICES ────────────────────────────────────────────────────────────────
+
+  [13] /invoices
+       - Table: Invoice#, Customer, Software, Amount, Tax, Total,
+                Type, Period, Payment Status, Payment Method, Date
+       - Filters: payment status, invoice type, date range, customer
+       - Sort: by date, amount, status
+       - Totals row: sum of paid / pending / overdue
+       - Export CSV button
+       - [+ Generate Invoice] button
+
+  [14] /invoices/:id
+       - Full invoice view (printable layout)
+       - Company header, customer details, line items, tax, total
+       - Payment status badge
+       - [Mark as Paid] button → opens payment details modal
+         (payment method, transaction ID, payment date)
+       - [Download PDF] button
+       - [Send to Customer] button → sends WhatsApp/SMS with payment link/PDF
+       - [Edit] button (only if still Pending)
+
+  [15] Invoice Generator modal
+       - Customer (searchable dropdown)
+       - Software (dropdown, filtered by customer's subscriptions)
+       - Invoice Type (NewPurchase/Renewal/Upgrade/Refund)
+       - Period From / Period To
+       - Amount (auto-fills from subscription, editable)
+       - Discount
+       - Tax % (auto-calculates total)
+       - Notes
+       - [Preview] → shows formatted invoice before saving
+       - [Save & Download PDF]
+       - [Save & Send to Customer]
+
+  ── ALERTS ──────────────────────────────────────────────────────────────────
+
+  [16] /alerts
+       Master alerts view. Three tabs:
+
+       TAB 1 — Client Alerts (renewal dues, payment overdue)
+         - List: Customer name, Software, Due Date, Days remaining,
+                 Severity badge, Status, SMS sent?
+         - Filters: severity, status, due in 7/30 days, overdue
+         - Bulk actions: [Send SMS to selected] [Mark resolved]
+         - Per row actions: [Send SMS] [Snooze] [Resolve] [View Customer]
+
+       TAB 2 — Infrastructure Alerts (domain/hosting/SSL)
+         - List: Software name, Alert type, Expiry date, Days remaining,
+                 Severity badge, Status
+         - Filters: type (Domain/Hosting/SSL), severity, software
+         - Per row: [Mark Resolved] [View Software] [Snooze]
+
+       TAB 3 — Internal / Marketing Alerts
+         - Custom alerts + marketing alerts
+         - [+ Create Manual Alert] button
+         - Per row: [Resolve] [Assign] [Snooze]
+
+       SMS Composer modal (opens when clicking [Send SMS]):
+         - Pre-filled message draft (editable)
+         - Channel selector: SMS or WhatsApp
+         - Phone number (pre-filled from customer)
+         - [Send] → calls sms.service → logs in Communications
+         - [Save Draft] → saves without sending
+
+  ── COMMUNICATIONS ──────────────────────────────────────────────────────────
+
+  [17] /communications
+       - Master log of all outbound/inbound communications
+       - Columns: Customer, Channel icon, Direction, Purpose, Message preview,
+                  Delivery Status, Sent By, Date
+       - Filters: channel, direction, purpose, delivery status, date range, customer
+       - Search by customer name or message content
+       - [+ Log Manual Communication] button
+
+  ── SUPPORT TICKETS ─────────────────────────────────────────────────────────
+
+  [18] /tickets
+       - Kanban board view (default) with columns:
+           Open | In Progress | Waiting on Client | Resolved | Closed
+       - Also: [List View] toggle for table format
+       - Filters: priority, software, assigned to, customer, type
+       - Each card shows: TKT#, customer name, software, priority badge, age
+       - [+ New Ticket] button
+
+  [19] /tickets/:id
+       - Full ticket thread view
+       - Header: TKT#, title, customer, software, status, priority, assigned to
+       - Description + attachments
+       - Reply thread (chronological, internal notes shown with gray bg)
+       - [Reply] text area with [Mark Internal] toggle
+       - [Attach files] button
+       - Sidebar: SLA timer (time since open, due by date), customer quick info
+       - Status change dropdown
+       - [Resolve] button → asks for resolution summary
+       - Customer rating (shown if status = Closed)
+
+  [20] /tickets/new
+       Form:
+         - Customer (searchable dropdown)
+         - Software (dropdown filtered by customer subscriptions)
+         - Title (required)
+         - Type (Bug/FeatureRequest/HowTo/Performance/Billing/Other)
+         - Priority (Low/Medium/High/Critical)
+         - Description (rich text or textarea)
+         - Attachments (file upload)
+         - Assigned To (user dropdown)
+         - Due By date (SLA)
+         - Tags
+
+  ── TEAM / USERS ────────────────────────────────────────────────────────────
+
+  [21] /team
+       (SuperAdmin only)
+       - Table: Name, Role, Department, Email, Phone, Active status,
+                Softwares assigned count, Last login
+       - Filters: role, department, isActive
+       - [+ Add Team Member] button
+       - [Deactivate] toggle per row
+
+  [22] /team/new
+       Form:
+         - Name, Email, Phone
+         - Role (Admin/Standard)
+         - Department
+         - Password (auto-generated or manual)
+         - Permissions (checkbox grid, 22 permissions across 6 groups)
+         - Softwares to assign (multi-select)
+
+  [23] /team/:id
+       - Profile view + edit
+       - Permissions editor (checkbox grid)
+       - Assigned softwares list
+       - Activity summary: customers managed, tickets handled, comms sent
+
+  ── REPORTS ─────────────────────────────────────────────────────────────────
+
+  [24] /reports
+       Four report cards, each with date range picker + export:
+
+       REPORT 1 — Revenue Report
+         - Monthly revenue bar chart (last 12 months)
+         - Breakdown: paid vs pending vs overdue
+         - Per-software revenue ranking
+         - Per-customer revenue ranking
+         - Top 5 customers by revenue
+         - Export: CSV
+
+       REPORT 2 — Subscription Report
+         - Active vs expired vs cancelled (donut chart)
+         - Renewals this month vs last month
+         - Churn rate (expired in last 30 days)
+         - Upcoming renewals calendar view (next 60 days)
+         - Export: CSV
+
+       REPORT 3 — Software Report
+         - Uptime % per software (bar chart)
+         - Customer count per software
+         - Tickets per software
+         - Infra expiry calendar
+         - Export: CSV
+
+       REPORT 4 — Communication Report
+         - SMS/WhatsApp sent per day (line chart)
+         - Delivery success rate
+         - Most communicated customers
+         - Export: CSV
+
+  ── AUDIT LOG ────────────────────────────────────────────────────────────────
+
+  [25] /audit
+       (SuperAdmin only)
+       - Table: Who, Action, Target, Record label, Changed Fields, IP, Date
+       - Filters: action type, target model, performed by, date range
+       - Click row → shows before/after diff view
+       - No edit or delete — read only
+
+  ── TAGS ────────────────────────────────────────────────────────────────────
+
+  [26] /settings/tags
+       - List of all tags with name, color, appliesTo, usage count
+       - [+ New Tag] button → name, color picker, appliesTo
+       - [Edit] [Delete] per tag (delete only if no records using it)
+
+  ── SETTINGS ────────────────────────────────────────────────────────────────
+
+  [27] /settings
+       Tabs:
+         TAB 1 — Profile: edit own name, phone, photo, change password
+         TAB 2 — Tags: manage tags (link to /settings/tags)
+         TAB 3 — SMS Config: enter MSG91 API key, WhatsApp number, test send
+         TAB 4 — Company Info: company name, address, logo (used in invoices)
+         TAB 5 — Notifications: toggle which events trigger in-app notifications
+         TAB 6 — Cron Status: (SuperAdmin) show last run time for each job
+
+  ── NOTIFICATIONS ────────────────────────────────────────────────────────────
+
+  [28] Notification Bell (global header component)
+       - Badge count of unread notifications
+       - Dropdown: last 10 notifications with title, message, time
+       - Click notification → navigates to linked record
+       - [Mark all read] button
+       - [View all] → /notifications page
+
+  [29] /notifications
+       - Full list of all notifications for logged-in user
+       - Filters: type, isRead, date range
+       - [Mark all read] button
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SECTION 4 — ALL API ENDPOINTS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  BASE URL: /api/v1
+
+  ── AUTH ─────────────────────────────────────────────────────────────────────
+  POST   /auth/login                     Login, returns JWT + refresh token
+  POST   /auth/logout                    Invalidate refresh token
+  POST   /auth/refresh                   Issue new access token using refresh
+  POST   /auth/forgot-password           Send reset link to email
+  POST   /auth/reset-password/:token     Set new password
+  GET    /auth/me                        Get logged-in user profile
+
+  ── USERS / TEAM ─────────────────────────────────────────────────────────────
+  GET    /users                          List all users (SuperAdmin)
+  POST   /users                          Create user (SuperAdmin)
+  GET    /users/:id                      Get user profile
+  PUT    /users/:id                      Update user (SuperAdmin)
+  PATCH  /users/:id/permissions          Update permissions (SuperAdmin)
+  PATCH  /users/:id/toggle-active        Activate/deactivate user
+  DELETE /users/:id                      Delete user (SuperAdmin)
+
+  ── CUSTOMERS ────────────────────────────────────────────────────────────────
+  GET    /customers                      List with filters + pagination
+  POST   /customers                      Create customer
+  GET    /customers/:id                  Get full customer profile
+  PUT    /customers/:id                  Update customer
+  DELETE /customers/:id                  Delete customer (SuperAdmin only)
+  GET    /customers/:id/subscriptions    All subscriptions for customer
+  GET    /customers/:id/invoices         All invoices for customer
+  GET    /customers/:id/communications   Communication timeline
+  GET    /customers/:id/tickets          Support tickets for customer
+  GET    /customers/:id/activity         AuditLog for customer record
+  GET    /customers/export/csv           Export customers as CSV
+
+  ── SOFTWARES ────────────────────────────────────────────────────────────────
+  GET    /softwares                      List with filters + pagination
+  POST   /softwares                      Create software
+  GET    /softwares/:id                  Get software detail
+  PUT    /softwares/:id                  Update software
+  DELETE /softwares/:id                  Delete (SuperAdmin, only if no active subscriptions)
+  GET    /softwares/:id/customers        Customers subscribed to this software
+  GET    /softwares/:id/tickets          Tickets for this software
+  POST   /softwares/:id/ping             Manual uptime check trigger
+  GET    /softwares/:id/uptime-log       Last 50 uptime check results
+
+  ── SUBSCRIPTIONS ────────────────────────────────────────────────────────────
+  GET    /subscriptions                  List all with filters + pagination
+  POST   /subscriptions                  Create subscription
+  GET    /subscriptions/:id             Get subscription detail
+  PUT    /subscriptions/:id             Update subscription
+  DELETE /subscriptions/:id             Cancel/delete subscription
+  POST   /subscriptions/:id/renew       Renew subscription (updates dates + creates invoice)
+
+  ── INVOICES ─────────────────────────────────────────────────────────────────
+  GET    /invoices                       List with filters + pagination
+  POST   /invoices                       Generate invoice
+  GET    /invoices/:id                   Get invoice detail
+  PUT    /invoices/:id                   Edit invoice (only if Pending)
+  PATCH  /invoices/:id/mark-paid         Mark as paid (method, txnId, date)
+  GET    /invoices/:id/pdf               Download invoice PDF
+  POST   /invoices/:id/send              Send invoice via SMS/WhatsApp
+  GET    /invoices/export/csv            Export invoices as CSV
+
+  ── ALERTS ───────────────────────────────────────────────────────────────────
+  GET    /alerts                         List with filters + pagination
+  POST   /alerts                         Create manual alert
+  GET    /alerts/:id                     Get alert detail
+  PUT    /alerts/:id                     Update alert
+  PATCH  /alerts/:id/resolve             Mark resolved
+  PATCH  /alerts/:id/snooze              Snooze until date
+  PATCH  /alerts/:id/dismiss             Dismiss alert
+  POST   /alerts/:id/send-sms            Send SMS/WhatsApp for this alert
+  POST   /alerts/send-bulk-sms           Send SMS to multiple alert customers
+  DELETE /alerts/:id                     Delete (SuperAdmin)
+
+  ── COMMUNICATIONS ───────────────────────────────────────────────────────────
+  GET    /communications                 List with filters + pagination
+  POST   /communications                 Log manual communication
+  POST   /communications/send-sms        Send SMS/WhatsApp + auto-log result
+  GET    /communications/:id             Get detail
+  DELETE /communications/:id             Delete (SuperAdmin)
+
+  ── SUPPORT TICKETS ──────────────────────────────────────────────────────────
+  GET    /tickets                        List with filters + pagination
+  POST   /tickets                        Create ticket
+  GET    /tickets/:id                    Get ticket with full thread
+  PUT    /tickets/:id                    Update ticket metadata
+  PATCH  /tickets/:id/status             Change status
+  PATCH  /tickets/:id/assign             Assign to user
+  POST   /tickets/:id/reply              Add reply (or internal note)
+  PATCH  /tickets/:id/resolve            Resolve with summary
+  PATCH  /tickets/:id/close              Close ticket
+  PATCH  /tickets/:id/rate              Submit customer rating (1-5)
+  DELETE /tickets/:id                    Delete (SuperAdmin)
+
+  ── NOTIFICATIONS ────────────────────────────────────────────────────────────
+  GET    /notifications                  Get all notifications for logged-in user
+  PATCH  /notifications/:id/read         Mark one as read
+  POST   /notifications/mark-all-read    Mark all as read
+  DELETE /notifications/:id              Dismiss notification
+
+  ── TAGS ─────────────────────────────────────────────────────────────────────
+  GET    /tags                           List all tags
+  POST   /tags                           Create tag
+  PUT    /tags/:id                       Update tag
+  DELETE /tags/:id                       Delete tag (only if unused)
+
+  ── DASHBOARD ────────────────────────────────────────────────────────────────
+  GET    /dashboard/stats                All KPI numbers in one call
+  GET    /dashboard/upcoming-renewals    Subscriptions due in next 7 days
+  GET    /dashboard/infra-alerts         Domain/hosting/SSL due in 30 days
+  GET    /dashboard/broken-softwares     Softwares with status=Broken or Down
+  GET    /dashboard/recent-activity      Last 10 AuditLog entries
+  GET    /dashboard/recent-invoices      Last 5 invoices
+
+  ── REPORTS ──────────────────────────────────────────────────────────────────
+  GET    /reports/revenue                Revenue report (date range, groupBy month)
+  GET    /reports/subscriptions          Subscription stats (active/expired/churn)
+  GET    /reports/softwares              Per-software stats
+  GET    /reports/communications         Communication delivery stats
+
+  ── AUDIT LOG ────────────────────────────────────────────────────────────────
+  GET    /audit                          List audit logs (SuperAdmin, paginated)
+  GET    /audit/:id                      Get single audit log with before/after diff
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SECTION 5 — SERVICES & BACKGROUND JOBS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ── sms.service.js ───────────────────────────────────────────────────────────
+  Functions:
+    sendSMS(phone, message)               → MSG91/Twilio REST call
+    sendWhatsApp(phone, message)          → WhatsApp Business API call
+    getDeliveryStatus(providerMessageId)  → check delivery from provider
+  Used by: alert.controller, communication.controller, invoice.controller
+
+  ── notification.service.js ──────────────────────────────────────────────────
+  Functions:
+    createNotification(userId, type, title, message, link, linkedModel, linkedId)
+    createBulkNotifications(userIds, payload)
+    markRead(notificationId)
+  Used by: all controllers that create significant events
+
+  ── invoice.service.js ───────────────────────────────────────────────────────
+  Functions:
+    generateInvoiceNumber()               → "INV-2025-0042" (auto-increment)
+    generatePDF(invoiceId)                → builds PDF using PDFKit/puppeteer
+    uploadPDF(buffer)                     → saves to Cloudinary, returns URL
+  Used by: invoice.controller, subscription renewal job
+
+  ── alert.service.js ─────────────────────────────────────────────────────────
+  Functions:
+    createAlert(type, subType, data)      → creates Alert document
+    dispatchAlert(alertId)                → fires through all alert.channels
+    retryFailedAlerts()                   → called by cron every 6 hours
+  Used by: renewal.job, infra.job, alert.controller
+
+  ── uptime.service.js ────────────────────────────────────────────────────────
+  Functions:
+    pingUrl(url)                          → HTTP HEAD request, returns status + ms
+    updateSoftwareStatus(softwareId, result)
+    checkAllSoftwares()                   → loops all Live softwares, pings each
+  Used by: uptime.job, software.controller (/ping endpoint)
+
+  ── auditlog.service.js ──────────────────────────────────────────────────────
+  Functions:
+    log(performedBy, action, targetModel, targetId, before, after, req)
+  Used by: audit.middleware (auto), controllers (manual for special events)
+
+  ── CRON JOBS ────────────────────────────────────────────────────────────────
+
+  renewal.job.js     → runs: every day at 8:00 AM
+    - Query subscriptions where renewalDate is 30, 7, or 1 days from today
+    - For each match: create Alert if not already created (check reminderSent flags)
+    - Set reminderSent.thirtyDays / sevenDays / oneDay = true
+    - Create Notification for assigned staff
+    - Query subscriptions where renewalDate < today + gracePeriodDays
+    - Set status = Expired, create PaymentOverdue Alert
+
+  infra.job.js       → runs: every day at 9:00 AM
+    - Query softwares where hostingExpiryDate is within 30 days
+    - Query softwares where domainExpiryDate is within 30 days
+    - Query softwares where sslExpiryDate is within 30 days
+    - For each: create Infra Alert if not already pending
+    - Assign severity: 30d = Info, 14d = Warning, 7d = Urgent
+
+  uptime.job.js      → runs: every 15 minutes
+    - Call uptime.service.checkAllSoftwares()
+    - If software goes from Up → Down: create SoftwareBroken Alert
+    - If software comes back Up: resolve previous Down alert
+    - Update uptimeStatus, lastCheckedAt, lastDownAt on Software
+    - Calculate rolling 30-day uptimePercent
+
+  invoice.job.js     → runs: every day at 7:00 AM
+    - Query invoices where paymentStatus = Pending AND dueDate < today
+    - Set paymentStatus = Overdue
+    - Create PaymentOverdue Alert if not exists
+    - Set reminderSent = false so next cycle re-notifies
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SECTION 6 — MIDDLEWARE CHAIN
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Every request flows through:
+    1. express.json() + express.urlencoded()
+    2. cors() — allow frontend origin
+    3. helmet() — security headers
+    4. morgan() — request logging
+    5. auth.middleware (verifyJWT) — all /api/v1 routes except /auth/*
+    6. role.permissions — route-level role check (e.g. SuperAdmin only)
+    7. permission.middleware — granular check (e.g. customers.edit)
+    8. Controller logic
+    9. audit.middleware — auto-log POST/PUT/PATCH/DELETE to AuditLog
+    10. response.util — standard JSON shape { success, data, message, pagination }
+
+  Error handler (global):
+    - Mongoose CastError → 400
+    - Mongoose ValidationError → 400 with field errors
+    - Duplicate key (code 11000) → 409 "already exists"
+    - JWT errors → 401
+    - Permission errors → 403
+    - Not found → 404
+    - All others → 500
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SECTION 7 — ROLE & PERMISSION MATRIX
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  FEATURE                  SUPERADMIN   ADMIN    STANDARD
+  ─────────────────────────────────────────────────────────
+  View all customers         YES         YES      Own only
+  Add customer               YES         YES      YES (if perm)
+  Edit customer              YES         YES      Own only
+  Delete customer            YES         NO       NO
+  View softwares             YES         YES      YES
+  Add/edit software          YES         YES      NO
+  Delete software            YES         NO       NO
+  View subscriptions         YES         YES      Own customers
+  Create subscription        YES         YES      NO
+  View invoices              YES         YES      Own customers
+  Create invoice             YES         YES      NO
+  Mark invoice paid          YES         YES      NO
+  View alerts                YES         YES      YES
+  Send SMS alerts            YES         YES      YES (if perm)
+  Resolve alerts             YES         YES      NO
+  View tickets               YES         YES      Own assigned
+  Create ticket              YES         YES      YES
+  Reply to ticket            YES         YES      YES
+  Assign ticket              YES         YES      NO
+  View communications        YES         YES      Own customers
+  Log communication          YES         YES      YES
+  View reports               YES         YES      NO
+  Export data                YES         NO       NO
+  View audit log             YES         NO       NO
+  Manage users               YES         NO       NO
+  Manage tags                YES         YES      NO
+  Settings / SMS config      YES         NO       NO
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SECTION 8 — ENVIRONMENT VARIABLES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  # Server
+  NODE_ENV=development
+  PORT=5000
+
+  # Database
+  MONGO_URI=mongodb://localhost:27017/sandhya_crm
+
+  # Auth
+  JWT_SECRET=your_jwt_secret_here
+  JWT_EXPIRES_IN=15m
+  REFRESH_TOKEN_SECRET=your_refresh_secret_here
+  REFRESH_TOKEN_EXPIRES_IN=7d
+
+  # SMS (MSG91)
+  MSG91_AUTH_KEY=your_msg91_key
+  MSG91_SENDER_ID=SANDHYA
+  MSG91_TEMPLATE_ID=your_template_id
+
+  # WhatsApp (optional, if using Meta Business API)
+  WHATSAPP_TOKEN=your_whatsapp_token
+  WHATSAPP_PHONE_ID=your_phone_number_id
+
+  # Email (optional)
+  SMTP_HOST=smtp.gmail.com
+  SMTP_PORT=587
+  SMTP_USER=your@email.com
+  SMTP_PASS=your_app_password
+
+  # File Storage (Cloudinary)
+  CLOUDINARY_CLOUD_NAME=your_cloud
+  CLOUDINARY_API_KEY=your_key
+  CLOUDINARY_API_SECRET=your_secret
+
+  # Frontend
+  FRONTEND_URL=http://localhost:3000
+
+  # Company Info (for invoice PDFs)
+  COMPANY_NAME=Sandhya Software Solutions
+  COMPANY_ADDRESS=Amravati, Maharashtra, India
+  COMPANY_PHONE=+91XXXXXXXXXX
+  COMPANY_EMAIL=info@sandhyasoftware.com
+  COMPANY_GST=GSTIN_HERE
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SECTION 9 — NPM PACKAGES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  BACKEND (production):
+    express             Web framework
+    mongoose            MongoDB ODM
+    dotenv              Environment variables
+    bcryptjs            Password hashing
+    jsonwebtoken        JWT auth
+    cookie-parser       Parse httpOnly cookies
+    cors                CORS config
+    helmet              Security headers
+    morgan              HTTP request logger
+    node-cron           Cron job scheduler
+    axios               HTTP calls (uptime ping, SMS API)
+    multer              File upload middleware
+    cloudinary          Cloud file storage
+    pdfkit              PDF generation for invoices
+    nodemailer          Email sending
+    express-validator   Input validation
+    express-rate-limit  Rate limiting on auth routes
+    slugify             URL-safe strings
+
+  BACKEND (dev):
+    nodemon             Auto-restart on file change
+
+  FRONTEND:
+    react               UI framework
+    react-router-dom    Client-side routing
+    axios               API calls
+    tailwindcss         Utility CSS
+    @tanstack/react-query  Server state + caching
+    zustand             Client state management
+    react-hook-form     Form handling
+    zod                 Schema validation
+    recharts            Charts (revenue, uptime)
+    date-fns            Date formatting
+    react-hot-toast     Toast notifications
+    lucide-react        Icon library
+    @hello-pangea/dnd   Drag-and-drop for kanban board
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SECTION 10 — BUILD ORDER (for Claude Code)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Build strictly in this order. Each phase depends on the previous.
+
+  PHASE 1 — Foundation
+    1. server.js setup (express, cors, helmet, morgan, error handler)
+    2. db.config.js (mongoose connect)
+    3. env.config.js (validate all required env vars on startup)
+    4. response.util.js (standard response shape)
+    5. All 11 Models (already done — copy from /Models)
+    6. auth.middleware.js (JWT verify)
+    7. role.permissions.js
+    8. permission.middleware.js
+
+  PHASE 2 — Auth
+    1. auth.controller.js (login, logout, refresh, forgotPassword, resetPassword, me)
+    2. auth.route.js
+    3. Seed scripts (create-superadmin, create-admin)
+    4. Test: login returns JWT, /me returns user
+
+  PHASE 3 — Core CRUD (build in this order)
+    1. tag.controller.js + tag.route.js (needed by customers + softwares)
+    2. user.controller.js + user.route.js
+    3. software.controller.js + software.route.js
+    4. customer.controller.js + customer.route.js
+    5. subscription.controller.js + subscription.route.js
+    6. Test all CRUD operations and role guards
+
+  PHASE 4 — Billing
+    1. invoiceNumber.util.js
+    2. invoice.service.js (generateInvoiceNumber, generatePDF, uploadPDF)
+    3. invoice.controller.js + invoice.route.js
+    4. Test: create invoice → PDF generated → mark paid flow
+
+  PHASE 5 — Alerts & Communications
+    1. sms.service.js
+    2. alert.service.js
+    3. alert.controller.js + alert.route.js
+    4. communication.controller.js + communication.route.js
+    5. Test: create alert → send SMS → log in Communications
+
+  PHASE 6 — Support Tickets
+    1. ticket.controller.js + ticket.route.js
+    2. Test: create → reply → resolve flow
+
+  PHASE 7 — Notifications & Audit
+    1. auditlog.service.js
+    2. audit.middleware.js (hook into all POST/PUT/PATCH/DELETE)
+    3. auditlog.controller.js + auditlog.route.js
+    4. notification.service.js
+    5. notification.controller.js + notification.route.js
+
+  PHASE 8 — Dashboard & Reports
+    1. dashboard.controller.js + dashboard.route.js
+    2. report.controller.js + report.route.js
+
+  PHASE 9 — Background Jobs
+    1. uptime.service.js
+    2. uptime.job.js
+    3. renewal.job.js
+    4. infra.job.js
+    5. invoice.job.js
+    6. jobs/index.js (register all, start on server boot)
+
+  PHASE 10 — Frontend
+    (Build only after backend is fully tested)
+    1. Setup: Vite + React + Tailwind + React Router
+    2. Auth pages: Login, Forgot Password, Reset Password
+    3. Layout: Sidebar nav, header with notification bell, breadcrumbs
+    4. Dashboard page
+    5. Customers: list, detail (all tabs), new form
+    6. Softwares: list, detail (all tabs), new form
+    7. Subscriptions: list, modal
+    8. Invoices: list, detail, generator modal
+    9. Alerts: list (3 tabs), SMS composer modal
+    10. Communications: list, log modal
+    11. Tickets: kanban board, detail thread, new form
+    12. Team: list, new, detail + permissions editor
+    13. Reports: 4 report pages with charts
+    14. Audit log page
+    15. Settings (profile, tags, SMS config, company info)
+    16. Notifications bell + /notifications page
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SECTION 11 — STANDARD API RESPONSE FORMAT
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  SUCCESS:
+  {
+    "success": true,
+    "message": "Customer created successfully",
+    "data": { ...record },
+    "pagination": {               // only on list endpoints
+      "total": 142,
+      "page": 1,
+      "limit": 20,
+      "pages": 8
+    }
+  }
+
+  ERROR:
+  {
+    "success": false,
+    "message": "Validation failed",
+    "errors": [                   // only for validation errors
+      { "field": "email", "message": "Email already exists" }
+    ]
+  }
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SECTION 12 — KEY BUSINESS RULES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  1. A customer can have multiple subscriptions (one per software).
+  2. A subscription can only be deleted if it has no paid invoices.
+  3. A software cannot be deleted if it has active subscriptions.
+  4. Invoice numbers are sequential and never reused (even on delete).
+  5. Audit logs are append-only — no update or delete allowed.
+  6. SMS reminders are gated by reminderSent flags — never send twice.
+  7. When a subscription is renewed, create a new Invoice automatically.
+  8. If software URL returns non-200 for 2 consecutive pings → status = Broken.
+  9. Alerts auto-resolve when the underlying condition is fixed
+     (e.g. invoice paid → close PaymentOverdue alert).
+  10. Standard users only see data for customers assigned to them (serviceUser).
+  11. SuperAdmin can see and do everything — permissions array is ignored.
+  12. Passwords must be bcrypt hashed — never stored plain.
+  13. Refresh tokens are stored in httpOnly cookies — not localStorage.
+  14. All file uploads (documents, invoices) go to Cloudinary — no local storage.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SECTION 13 — FRONTEND UI PRINCIPLES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  GOAL: Professional business software aesthetic — clean, flat, dense.
+        Reference design: the Login screen (two-panel Zoho-style card).
+
+  ── BACKGROUNDS ──────────────────────────────────────────────────────────────
+
+  - Page background   : white (#ffffff) — no grey tints, no blue-tinted bg
+  - Card/panel bg     : white (#ffffff)
+  - Table header row  : #f9fafb (very light, near-white)
+  - Table hover row   : #f9fafb
+  - No gradient backgrounds anywhere — not on cards, banners, or headers
+  - No colored "welcome" or "hero" banners with blue/purple gradients
+
+  ── BORDERS (primary separation method) ─────────────────────────────────────
+
+  - All cards, panels, tables, inputs : border: 1px solid gainsboro
+  - Table header bottom               : borderBottom: 1px solid gainsboro
+  - Table row separator               : borderTop: 1px solid #f3f4f6
+  - Section dividers inside panels    : borderTop: 1px solid gainsboro
+  - Do NOT use box-shadow as the main separation mechanism
+  - Hover state on clickable cards    : border color changes to #1a73e8
+    (same as input focus color on Login)
+
+  ── BORDER RADIUS ────────────────────────────────────────────────────────────
+
+  - Cards / panels / containers : borderRadius: 8px
+  - Buttons                     : borderRadius: 6px
+  - Inputs                      : borderRadius: 6px
+  - Badges / pills              : borderRadius: 4px
+  - Avatar circles              : borderRadius: 50%
+  - Icon containers (KPI)       : borderRadius: 7px
+  - No 14px / 16px rounded cards — keep it tight and business-like
+
+  ── TYPOGRAPHY ───────────────────────────────────────────────────────────────
+
+  - Font family   : 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif
+  - Page title    : 18px, fontWeight 700, color #111827
+  - Section title : 13.5px, fontWeight 600, color #111827
+  - Body / table  : 13px, color #111827
+  - Secondary text: 12px, color #9ca3af
+  - Section label : 11px, fontWeight 600, color #9ca3af, textTransform uppercase,
+                    letterSpacing 0.5px
+  - KPI value     : 26px, fontWeight 700, letterSpacing -0.5px, color #111827
+  - No large decorative headings on inner pages
+
+  ── SPACING — COMPACT, NOT AIRY ──────────────────────────────────────────────
+
+  - Page top margin between title and content : 20px
+  - Gap between grid cards                    : 12px
+  - Gap between grid rows                     : 12–16px
+  - Panel header padding                      : 13px 18px
+  - Panel body padding                        : 14px 18px
+  - Table cell padding                        : 10px 16px (TD), 8px 16px (TH)
+  - KPI card inner padding                    : 16px
+  - Quick-tile / module-tile padding          : 16px
+  - No 28px / 40px / 52px padding inside content cards
+
+  ── COLORS ───────────────────────────────────────────────────────────────────
+
+  - Primary blue    : #1a73e8 (buttons, links, active states, icon highlights)
+  - Hover blue      : #1557b0 (primary button hover)
+  - Primary text    : #111827
+  - Secondary text  : #374151
+  - Muted text      : #6b7280
+  - Placeholder     : #9ca3af
+  - Border          : gainsboro (= #dcdcdc)
+  - Row border      : #f3f4f6
+  - Error red       : #dc2626 / bg #fef2f2
+  - Success green   : #16a34a / bg #f0fdf4
+  - Warning amber   : #d97706 / bg #fffbeb
+  - Info teal       : #0891b2
+
+  ── BADGES / PILLS ───────────────────────────────────────────────────────────
+
+  - Shape   : borderRadius 4px (rectangular, not round)
+  - Size    : fontSize 11px, fontWeight 600, padding 2px 8px
+  - Colors follow the semantic color palette above (status, action, severity)
+  - No circular dot badges on status — use rectangular pills
+
+  ── INTERACTIVE STATES ───────────────────────────────────────────────────────
+
+  - Clickable card hover : border-color → #1a73e8, no transform/shadow changes
+  - Button hover         : background darkens (e.g. #1a73e8 → #1557b0)
+  - Table row hover      : background → #f9fafb
+  - Link hover           : text-decoration underline OR background → #eff6ff pill
+  - Input focus          : border-color → #1a73e8 (no glow/shadow)
+  - No translateY / scale transforms on hover — keep it flat and stable
+
+  ── WHAT NOT TO DO ───────────────────────────────────────────────────────────
+
+  - No blue/purple/gradient welcome banners
+  - No box-shadow as primary card differentiation
+  - No large borderRadius (14px+) on content cards
+  - No excessive margin/padding that makes the UI feel "airy" or "landing-page"
+  - No colored card backgrounds (eff6ff, f0fdf4 fills on entire cards)
+  - No drop shadows on buttons — use background color change instead
+  - No emojis in UI labels or headings
+  - No animation/transition other than border-color and background-color changes
+
+================================================================================
+  END OF PLAN
+================================================================================

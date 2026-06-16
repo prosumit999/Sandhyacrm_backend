@@ -1,0 +1,93 @@
+const express = require("express")
+const http    = require("http")
+const { Server } = require("socket.io")
+const app = express()
+const dotenv = require("dotenv")
+const cookieParser = require("cookie-parser")
+const cors = require("cors")
+const databaseConnection = require("./config/db.config")
+const startJobs = require("./Cron/index")
+
+// Route imports
+const authRoute = require("./Routes/auth.route")
+const userRoute = require("./Routes/user.route")
+const dashboardRoute = require("./Routes/dashboard.route")
+const reportRoute = require("./Routes/report.route")
+const customerRoute = require("./Routes/customer.route")
+const softwareRoute = require("./Routes/software.route")
+const subscriptionRoute = require("./Routes/subscription.route")
+const invoiceRoute = require("./Routes/invoice.route")
+const alertRoute = require("./Routes/alert.route")
+const tagRoute = require("./Routes/tag.route")
+const communicationRoute = require("./Routes/communication.route")
+const ticketRoute = require("./Routes/ticket.route")
+const notificationRoute = require("./Routes/notification.route")
+const auditlogRoute = require("./Routes/auditlog.route")
+const settingsRoute = require("./Routes/settings.route")
+const socialRoute   = require("./Routes/social.route")
+const teamRoute     = require("./Routes/team.route")
+const chatRoute     = require("./Routes/chat.route")
+const portalRoute   = require("./Routes/portal.route")
+
+dotenv.config()
+
+app.use(express.json())
+app.use(express.urlencoded({ extended: true }))
+app.use(cookieParser())
+app.use(cors({
+    origin: process.env.FRONTEND_URL,
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
+}))
+
+databaseConnection()
+startJobs()
+
+app.get("/", (req, res) => res.send("Sandhya CRM API"))
+
+// API routes
+app.use("/api/v1/auth", authRoute)
+app.use("/api/v1/users", userRoute)
+app.use("/api/v1/dashboard", dashboardRoute)
+app.use("/api/v1/customers", customerRoute)
+app.use("/api/v1/softwares", softwareRoute)
+app.use("/api/v1/subscriptions", subscriptionRoute)
+app.use("/api/v1/invoices", invoiceRoute)
+app.use("/api/v1/alerts", alertRoute)
+app.use("/api/v1/tags", tagRoute)
+app.use("/api/v1/communications", communicationRoute)
+app.use("/api/v1/tickets", ticketRoute)
+app.use("/api/v1/notifications", notificationRoute)
+app.use("/api/v1/audit", auditlogRoute)
+app.use("/api/v1/reports", reportRoute)
+app.use("/api/v1/settings", settingsRoute)
+app.use("/api/v1/social",   socialRoute)
+app.use("/api/v1/teams",    teamRoute)
+app.use("/api/v1/chat",     chatRoute)
+app.use("/api/v1/portal",   portalRoute)
+
+// Global 404 handler
+app.use((req, res) => {
+    res.status(404).json({ success: false, message: "Route not found" })
+})
+
+// Global error handler
+app.use((err, req, res, next) => {
+    res.status(500).json({ success: false, message: err.message || "Internal Server Error" })
+})
+
+const server = http.createServer(app)
+
+const io = new Server(server, {
+  cors: {
+    origin: process.env.FRONTEND_URL,
+    credentials: true,
+    methods: ["GET", "POST"],
+  },
+})
+
+require("./socket/chatSocket")(io)
+
+server.listen(process.env.PORT, () => {
+  console.log("App Is Running On Port " + process.env.PORT)
+})

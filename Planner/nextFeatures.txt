@@ -1,0 +1,130 @@
+Built Features ->
+
+  MODELS (11/11 done)
+  - user.schema.js              Users with roles: SuperAdmin, Admin, Standard
+  - Customer.model.js           Customer CRM records
+  - Softwares.schema.js         Software products
+  - Subscription.Schema.js      Customer <-> Software link with renewal dates
+  - Invoice.Schema.js           Billing records
+  - Alert.Schema.js             Renewal, infra, marketing alerts
+  - Communication.schema.js     SMS/WhatsApp/Call/Email log per customer
+  - SupportTicket.schema.js     Tickets with reply thread subdocument + SLA fields
+  - AuditLog.schema.js          Immutable action history with before/after snapshots
+  - Notification.schema.js      In-app bell notifications per user with deep link
+  - Tag.schema.js               Labels with color + appliesTo scope
+
+  UTILS (4/4 done)
+  - invoiceNumber.util.js       generateInvoiceNumber() INV-YYYY-XXXX, generateTicketNumber() TKT-YYYY-XXXX
+  - response.util.js            sendSuccess / sendError wrappers
+  - pagination.util.js          getPaginationParams / buildPaginationMeta
+  - date.util.js                daysUntil / isExpired / addDays
+
+  SERVICES (7/7 done)
+  - auditlog.service.js         writeAuditLog() — silent helper, strips passwords before persist
+  - notification.service.js     createNotification() + createBulkNotifications() — push to Notifications collection
+  - sms.service.js              sendSMS() + sendWhatsApp() via MSG91, auto-logs to Communications
+  - email.service.js            sendResetEmail() + sendInvoiceEmail() + sendAlertEmail() via SMTP
+  - alert.service.js            createAlert() + createAlertsBulk() — creates alert + notifies managers
+  - uptime.service.js           pingUrl() + checkAllSoftwareUptime() — updates software status, creates alerts
+  - invoice.service.js          generateInvoicePDF() via PDFKit + uploadInvoicePDF() to Cloudinary
+
+  CONTROLLERS (16/16 done)
+  - user.controller.js          Full CRUD + login + logout + toggleActive + updatePermissions
+  - superadmin.controller.js    DashboardInfo (legacy stub — replaced by dashboard.controller.js)
+  - customer.controller.js      Full CRUD + getCustomerSubscriptions + getCustomerInvoices
+  - software.controller.js      Full CRUD + getSoftwareCustomers (blocks delete if active subs)
+  - subscription.controller.js  Full CRUD + renewSubscription (auto-creates invoice on renew)
+  - invoice.controller.js       Full CRUD + markInvoicePaid (uses generateInvoiceNumber util)
+  - alert.controller.js         Full CRUD + resolveAlert + snoozeAlert + dismissAlert
+  - auth.controller.js          login, logout, refreshToken, forgotPassword, resetPassword, getMe
+                                GOTCHA-009 FIXED: forgotPassword now calls email.service.sendResetEmail()
+                                                  falls back to body-only in dev if SMTP not configured
+  - tag.controller.js           Full CRUD (delete blocked if tag referenced by Customer or Software)
+  - communication.controller.js List + createManual + getById + delete (SuperAdmin only)
+  - ticket.controller.js        Full CRUD + reply + assign + resolve + close + rate
+  - notification.controller.js  getMyNotifications + markRead + markAllRead + dismiss
+  - auditlog.controller.js      Read-only list + getById (SuperAdmin + Admin only)
+  - dashboard.controller.js     getKPIs + getUpcomingRenewals + getInfraAlerts + getSoftwareStatus
+                                + getRecentActivity + getAlertSummary
+  - report.controller.js        getRevenueReport + getSubscriptionReport + getSoftwareReport
+                                + getCommunicationReport (all with aggregation pipelines)
+
+  ROUTES (15/15 done)
+  - user.route.js               /api/v1/users  (full CRUD + toggle-active + permissions)
+  - customer.route.js           /api/v1/customers  (full CRUD + nested subs + invoices)
+  - software.route.js           /api/v1/softwares  (full CRUD + customers)
+  - subscription.route.js       /api/v1/subscriptions  (full CRUD + renew)
+  - invoice.route.js            /api/v1/invoices  (full CRUD + mark-paid)
+  - alert.route.js              /api/v1/alerts  (full CRUD + resolve + snooze + dismiss)
+  - auth.route.js               /api/v1/auth  (login, logout, refresh, forgot-password, reset-password/:token, me)
+  - tag.route.js                /api/v1/tags  (full CRUD)
+  - communication.route.js      /api/v1/communications  (list + create + getById + delete)
+  - ticket.route.js             /api/v1/tickets  (full CRUD + reply + assign + resolve + close + rate)
+  - notification.route.js       /api/v1/notifications  (list + mark-read + mark-all-read + dismiss)
+  - auditlog.route.js           /api/v1/audit  (list + getById — read-only)
+  - dashboard.route.js          /api/v1/dashboard  (kpis + renewals + infra-alerts + software-status
+                                                     + recent-activity + alert-summary)
+  - report.route.js             /api/v1/reports  (revenue + subscriptions + softwares + communications)
+
+  MIDDLEWARES (5/5 done)
+  - role.permissions.js         JWT verify + role-based access
+  - auth.middleware.js          verifyJWT — reads logintoken cookie, fetches live user, attaches req.user
+  - permission.middleware.js    requirePermission(...perms) — SuperAdmin always passes
+  - audit.middleware.js         Auto-log POST/PUT/PATCH/DELETE to AuditLog via res.json interception
+  - upload.middleware.js        uploadSingle / uploadMultiple — multer memory storage
+
+  SERVER
+  - server.js                   All 15 routes mounted at /api/v1/*, 404 + global error handler
+
+  .ENV
+  - .env                        Updated with all placeholder keys grouped by service
+                                Replace all REPLACE_WITH_* values before going live
+
+------------------
+
+Next Built Features ->
+
+  PRIORITY 1 — Missing Models (DONE)
+  PRIORITY 2 — Auth Controller (DONE)
+  PRIORITY 3 — Remaining Middlewares (DONE)
+  PRIORITY 4 — Utils (DONE)
+  PRIORITY 5 — Remaining Controllers + Routes (DONE)
+  PRIORITY 6 — Services (DONE)
+  PRIORITY 7 — Dashboard + Reports (DONE)
+
+  PRIORITY 7 — Dashboard + Reports (DONE)
+  PRIORITY 8 — Background Cron Jobs (DONE)
+  - Cron/renewal.job.js         Daily 8AM IST: 30/7/1-day + overdue windows, reminderSent flags prevent duplicates
+  - Cron/infra.job.js           Daily 9AM IST: domain/hosting/SSL, deduped via alertExists() check
+  - Cron/uptime.job.js          Every 15min: delegates to uptime.service.checkAllSoftwareUptime()
+  - Cron/invoice.job.js         Daily 7AM IST: updateMany Pending→Overdue + notifies managers
+  - Cron/index.js               startJobs() — registers all 4 jobs, called from server.js on boot
+
+  PRIORITY 9 — Frontend (React + HeroUI + Tailwind v4 + Redux)
+  ✅ Setup                      Vite 8 + React 19 + HeroUI v3 + Tailwind v4 + Redux Toolkit + Axios + React Router
+  ✅ API Layer                  14 src/api/ service files — every backend endpoint mapped
+  ✅ Auth state (Redux)         authSlice — cookie-based, initializeAuth on startup, no localStorage
+  ✅ Routing                    AppRoutes + ProtectedRoute (14 protected routes)
+  ✅ /login                     Login page — Zoho-style two-panel card, minimal animation
+
+  🔧 NEXT — Build in this order:
+  ❌ Layout shell               Sidebar nav + top header + notification bell (global — needed by all pages)
+  ❌ /dashboard                 KPI cards (revenue, customers, tickets, alerts), renewals list, quick actions
+  ❌ /customers                 List table with filters + pagination
+  ❌ /customers/:id             Detail page with 6 tabs (Overview, Subs, Invoices, Comms, Tickets, Activity)
+  ❌ /softwares                 Grid/table
+  ❌ /softwares/:id             Detail page with 5 tabs
+  ❌ /subscriptions             Master list, add/renew modal
+  ❌ /invoices                  List, detail (printable), generate modal, mark-paid
+  ❌ /alerts                    3-tab view (Client / Infra / Internal), SMS composer modal
+  ❌ /communications            Master log, log manual entry
+  ❌ /tickets                   Kanban board, thread view, new form
+  ❌ /users                     List, new member form, permissions editor
+  ❌ /reports                   4 report pages with charts
+  ❌ /audit                     Read-only table with before/after diff
+  ❌ Settings + Notifications   Bell dropdown, /notifications page, settings tabs
+  ✅ /forgot-password           Forgot password form — email input, success state, back to sign in
+  ✅ /reset-password/:token     Reset password form — new+confirm with show/hide, auto-redirect on success
+  ✅ /users/new                 Create User form — name, email, phone, dept, role selector, password
+
+  Design system: see Frontend/Planner/remeber.txt (Section 1 + 2)
