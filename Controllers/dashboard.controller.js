@@ -34,11 +34,11 @@ const getKPIs = async (req, res) => {
             Alerts.countDocuments({ status: "Pending" }),
             SupportTickets.countDocuments({ status: { $in: ["Open", "InProgress"] } }),
             Invoices.aggregate([
-                { $match: { paymentStatus: "Paid", paymentDate: { $gte: startOfMonth } } },
+                { $match: { paymentStatus: "Paid", $or: [{ paymentDate: { $gte: startOfMonth } }, { paymentDate: null, updatedAt: { $gte: startOfMonth } }, { paymentDate: { $exists: false }, updatedAt: { $gte: startOfMonth } }] } },
                 { $group: { _id: null, total: { $sum: "$totalAmount" } } },
             ]),
             Invoices.aggregate([
-                { $match: { paymentStatus: "Paid", paymentDate: { $gte: startOfYear } } },
+                { $match: { paymentStatus: "Paid", $or: [{ paymentDate: { $gte: startOfYear } }, { paymentDate: null, updatedAt: { $gte: startOfYear } }, { paymentDate: { $exists: false }, updatedAt: { $gte: startOfYear } }] } },
                 { $group: { _id: null, total: { $sum: "$totalAmount" } } },
             ]),
             Invoices.aggregate([
@@ -177,7 +177,7 @@ const getMyOverview = async (req, res) => {
 
         const myCustomerIds = await Customers.distinct("_id", { serviceUser: userId })
 
-        const [customers, upcomingRenewals, overdueInvoices, pendingAlerts] = await Promise.all([
+        const [customers, upcomingRenewals, overdueInvoices, pendingAlerts, openTickets] = await Promise.all([
             Customers.find({ serviceUser: userId })
                 .select("name email phone businessName status referrredBy createdAt")
                 .sort({ createdAt: -1 }),
@@ -199,6 +199,7 @@ const getMyOverview = async (req, res) => {
                 .select("title severity dueDate subType status customer")
                 .sort({ dueDate: 1 })
                 .limit(10),
+            SupportTickets.countDocuments({ customer: { $in: myCustomerIds }, status: { $in: ["Open", "InProgress"] } }),
         ])
 
         res.status(200).json({
@@ -209,6 +210,7 @@ const getMyOverview = async (req, res) => {
                     activeCustomers:  customers.filter(c => c.status === "Active").length,
                     leadCustomers:    customers.filter(c => c.status === "Lead").length,
                     upcomingRenewals: upcomingRenewals.length,
+                    openTickets,
                     overdueCount:     overdueInvoices.length,
                     overdueAmount:    overdueInvoices.reduce((s, inv) => s + (inv.totalAmount || 0), 0),
                 },

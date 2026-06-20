@@ -15,7 +15,7 @@ const createAlert = async (alertData) => {
                 type: "AlertTriggered",
                 title: alertData.title,
                 message: alertData.message,
-                link: `/alerts/${alert._id}`,
+                link: `/alerts`,
                 linkedModel: "Alerts",
                 linkedId: alert._id,
             })

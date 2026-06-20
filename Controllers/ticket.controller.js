@@ -1,6 +1,7 @@
 const SupportTickets = require("../Models/SupportTicket.schema")
 const { generateTicketNumber } = require("../Utils/invoiceNumber.util")
 const { getPaginationParams, buildPaginationMeta } = require("../Utils/pagination.util")
+const { createPortalNotification } = require("../Services/portalNotification.service")
 
 const getAllTickets = async (req, res) => {
     try {
@@ -41,7 +42,7 @@ const createTicket = async (req, res) => {
         }
 
         const ticketNumber = await generateTicketNumber()
-        const ticket = new SupportTickets({ ...req.body, ticketNumber, createdBy: req.user.id })
+        const ticket = new SupportTickets({ ...req.body, ticketNumber, createdBy: req.user.id, dueBy: new Date(Date.now() + 10 * 60 * 1000) })
         await ticket.save()
 
         const populated = await ticket.populate([
@@ -111,6 +112,17 @@ const addReply = async (req, res) => {
             await SupportTickets.findByIdAndUpdate(req.params.id, { firstResponseAt: new Date() })
         }
 
+        // Notify portal customer when a staff member adds a visible reply
+        if (!isInternal && ticket.customer) {
+            createPortalNotification({
+                customer: ticket.customer,
+                type:    "TicketReplied",
+                title:   "New reply on your ticket",
+                message: `Your support ticket #${ticket.ticketNumber} has received a reply from our team.`,
+                link:    `/portal/tickets/${ticket._id}`,
+            })
+        }
+
         res.status(200).json({ success: true, message: "Reply added", data: ticket })
     } catch (err) {
         res.status(500).json({ success: false, message: err.message })
@@ -144,6 +156,18 @@ const resolveTicket = async (req, res) => {
             { new: true }
         )
         if (!ticket) return res.status(404).json({ success: false, message: "Ticket not found" })
+
+        // Notify portal customer that their ticket is resolved
+        if (ticket.customer) {
+            createPortalNotification({
+                customer: ticket.customer,
+                type:    "TicketResolved",
+                title:   "Your ticket has been resolved",
+                message: `Support ticket #${ticket.ticketNumber} has been marked as resolved. We hope your issue is fixed!`,
+                link:    `/portal/tickets/${ticket._id}`,
+            })
+        }
+
         res.status(200).json({ success: true, message: "Ticket resolved", data: ticket })
     } catch (err) {
         res.status(500).json({ success: false, message: err.message })

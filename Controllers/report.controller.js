@@ -11,12 +11,22 @@ const getRevenueReport = async (req, res) => {
         const startOfYear = new Date(year, 0, 1)
         const endOfYear = new Date(year + 1, 0, 1)
 
+        // Match paid invoices within the year; fall back to updatedAt when paymentDate is missing
+        const paidInYearMatch = {
+            paymentStatus: "Paid",
+            $or: [
+                { paymentDate: { $gte: startOfYear, $lt: endOfYear } },
+                { paymentDate: null, updatedAt: { $gte: startOfYear, $lt: endOfYear } },
+                { paymentDate: { $exists: false }, updatedAt: { $gte: startOfYear, $lt: endOfYear } },
+            ],
+        }
+
         const [monthlyRevenue, bySoftware, byInvoiceType] = await Promise.all([
             Invoices.aggregate([
-                { $match: { paymentStatus: "Paid", paymentDate: { $gte: startOfYear, $lt: endOfYear } } },
+                { $match: paidInYearMatch },
                 {
                     $group: {
-                        _id: { month: { $month: "$paymentDate" } },
+                        _id: { month: { $month: { $ifNull: ["$paymentDate", "$updatedAt"] } } },
                         total: { $sum: "$totalAmount" },
                         count: { $sum: 1 },
                     },
@@ -24,7 +34,7 @@ const getRevenueReport = async (req, res) => {
                 { $sort: { "_id.month": 1 } },
             ]),
             Invoices.aggregate([
-                { $match: { paymentStatus: "Paid", paymentDate: { $gte: startOfYear, $lt: endOfYear } } },
+                { $match: paidInYearMatch },
                 { $group: { _id: "$software", total: { $sum: "$totalAmount" }, count: { $sum: 1 } } },
                 { $lookup: { from: "softwares", localField: "_id", foreignField: "_id", as: "software" } },
                 { $unwind: { path: "$software", preserveNullAndEmptyArrays: true } },
@@ -33,7 +43,7 @@ const getRevenueReport = async (req, res) => {
                 { $limit: 10 },
             ]),
             Invoices.aggregate([
-                { $match: { paymentStatus: "Paid", paymentDate: { $gte: startOfYear, $lt: endOfYear } } },
+                { $match: paidInYearMatch },
                 { $group: { _id: "$invoiceType", total: { $sum: "$totalAmount" }, count: { $sum: 1 } } },
             ]),
         ])

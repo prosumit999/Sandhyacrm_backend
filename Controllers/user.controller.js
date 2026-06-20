@@ -2,6 +2,7 @@ const Users = require("../Models/user.schema")
 const bcryptjs = require("bcryptjs")
 const jwt = require("jsonwebtoken")
 const { getPaginationParams, buildPaginationMeta } = require("../Utils/pagination.util")
+const { writeAuditLog } = require("../Services/auditlog.service")
 
 const getAllUsers = async (req, res) => {
     try {
@@ -53,6 +54,8 @@ const createUser = async (req, res) => {
         const user = new Users({ name, email, password: hashedPassword, phone, role, department })
         await user.save()
 
+        writeAuditLog({ category: "Security", action: "UserCreated", performedBy: req.user.id, targetModel: "Users", targetId: user._id, targetLabel: user.email, severity: "info", metadata: { role: role || "Standard", createdByRole: req.user.role }, ipAddress: req.ip }).catch(() => {})
+
         const { password: _, ...userData } = user.toObject()
         res.status(201).json({ success: true, message: `${name} created successfully`, data: userData })
     } catch (err) {
@@ -65,9 +68,16 @@ const createUser = async (req, res) => {
 const updateUser = async (req, res) => {
     try {
         const { password, passwordResetToken, passwordResetExpires, ...safeFields } = req.body
+        // Capture old role before update if role is being changed
+        const oldUser = safeFields.role
+            ? await Users.findById(req.params.id).select("email role").lean()
+            : null
         const user = await Users.findByIdAndUpdate(req.params.id, safeFields, { new: true, runValidators: true })
             .select("-password -passwordResetToken -passwordResetExpires")
         if (!user) return res.status(404).json({ success: false, message: "User not found" })
+        if (oldUser && safeFields.role && oldUser.role !== safeFields.role) {
+            writeAuditLog({ category: "Security", action: "RoleChanged", performedBy: req.user.id, targetModel: "Users", targetId: user._id, targetLabel: user.email, severity: "warning", metadata: { oldRole: oldUser.role, newRole: safeFields.role, changedByRole: req.user.role }, ipAddress: req.ip }).catch(() => {})
+        }
         res.status(200).json({ success: true, message: "User updated", data: user })
     } catch (err) {
         if (err.code === 11000) return res.status(409).json({ success: false, message: "Email already in use" })
@@ -84,6 +94,7 @@ const deleteUser = async (req, res) => {
         const user = await Users.findByIdAndUpdate(req.params.id, { isActive: false }, { new: true })
             .select("-password -passwordResetToken -passwordResetExpires")
         if (!user) return res.status(404).json({ success: false, message: "User not found" })
+        writeAuditLog({ category: "Security", action: "UserDeactivated", performedBy: req.user.id, targetModel: "Users", targetId: user._id, targetLabel: user.email, severity: "warning", metadata: { deactivatedByRole: req.user.role }, ipAddress: req.ip }).catch(() => {})
         res.status(200).json({ success: true, message: "User deactivated", data: user })
     } catch (err) {
         res.status(500).json({ success: false, message: err.message })
@@ -101,6 +112,7 @@ const toggleUserActive = async (req, res) => {
 
         user.isActive = !user.isActive
         await user.save()
+        writeAuditLog({ category: "Security", action: user.isActive ? "UserActivated" : "UserDeactivated", performedBy: req.user.id, targetModel: "Users", targetId: user._id, targetLabel: user.email, severity: user.isActive ? "info" : "warning", metadata: { changedByRole: req.user.role }, ipAddress: req.ip }).catch(() => {})
         res.status(200).json({ success: true, message: `User ${user.isActive ? "activated" : "deactivated"}`, data: { id: user._id, isActive: user.isActive } })
     } catch (err) {
         res.status(500).json({ success: false, message: err.message })
@@ -123,6 +135,7 @@ const updateUserPermissions = async (req, res) => {
 
         user.permissions = permissions
         await user.save()
+        writeAuditLog({ category: "Security", action: "PermissionChanged", performedBy: req.user.id, targetModel: "Users", targetId: user._id, targetLabel: user.email, severity: "warning", metadata: { permissions, changedByRole: req.user.role }, ipAddress: req.ip }).catch(() => {})
         res.status(200).json({ success: true, message: "Permissions updated", data: { id: user._id, role: user.role, permissions: user.permissions } })
     } catch (err) {
         res.status(500).json({ success: false, message: err.message })
@@ -210,7 +223,7 @@ const loginUser = async (req, res) => {
 
         const token = jwt.sign({ id: user._id, email: user.email, role: user.role }, process.env.JWT_SEC, { expiresIn: "2d" })
 
-        res.cookie("logintoken", token, { httpOnly: true, sameSite: "Strict", maxAge: 2 * 24 * 60 * 60 * 1000 })
+        res.cookie("logintoken", token, { httpOnly: true, maxAge: 2 * 24 * 60 * 60 * 1000 })
 
         user.lastLogin = new Date()
         await user.save()
@@ -227,7 +240,7 @@ const loginUser = async (req, res) => {
 
 const logOut = async (req, res) => {
     try {
-        res.clearCookie("logintoken", { httpOnly: true, sameSite: "Strict" })
+        res.clearCookie("logintoken", { httpOnly: true })
         res.status(200).json({ success: true, message: "Logged out successfully" })
     } catch (err) {
         res.status(500).json({ success: false, message: err.message })

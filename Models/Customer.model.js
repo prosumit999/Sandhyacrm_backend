@@ -67,8 +67,10 @@ const CustomerSchema = mongoose.Schema({
     },
 
     // Customer portal access
-    portalAccess:   { type: Boolean, default: false },
-    portalPassword: { type: String },                    // bcrypt hashed
+    portalAccess:        { type: Boolean, default: false },
+    portalPassword:      { type: String },               // bcrypt hashed
+    portalResetToken:    { type: String },               // sha256 hashed reset token
+    portalResetExpires:  { type: Date },
 })
 
 const Customers = mongoose.model("Customers", CustomerSchema)

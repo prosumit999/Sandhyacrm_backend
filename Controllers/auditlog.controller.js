@@ -5,15 +5,18 @@ const { getPaginationParams, buildPaginationMeta } = require("../Utils/paginatio
 const getAllAuditLogs = async (req, res) => {
     try {
         const { page, limit, skip } = getPaginationParams(req.query)
-        const { targetModel, action, performedBy, dateFrom, dateTo } = req.query
+        const { targetModel, action, performedBy, performedByEmail, category, severity, dateFrom, dateTo } = req.query
         const query = {}
-        if (targetModel) query.targetModel = targetModel
-        if (action) query.action = action
-        if (performedBy) query.performedBy = performedBy
+        if (targetModel)       query.targetModel       = targetModel
+        if (action)            query.action            = action
+        if (performedBy)       query.performedBy       = performedBy
+        if (performedByEmail)  query.performedByEmail  = { $regex: performedByEmail, $options: "i" }
+        if (category)          query.category          = category
+        if (severity)          query.severity          = severity
         if (dateFrom || dateTo) {
             query.createdAt = {}
             if (dateFrom) query.createdAt.$gte = new Date(dateFrom)
-            if (dateTo) query.createdAt.$lte = new Date(dateTo)
+            if (dateTo)   query.createdAt.$lte = new Date(dateTo)
         }
 
         const [logs, total] = await Promise.all([
@@ -41,4 +44,24 @@ const getAuditLogById = async (req, res) => {
     }
 }
 
-module.exports = { getAllAuditLogs, getAuditLogById }
+// Summary counts for dashboard widgets
+const getAuditStats = async (req, res) => {
+    try {
+        const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000)
+        const [byCategory, bySeverity, topActions, last24h] = await Promise.all([
+            AuditLogs.aggregate([{ $group: { _id: "$category", count: { $sum: 1 } } }, { $sort: { count: -1 } }]),
+            AuditLogs.aggregate([{ $group: { _id: "$severity", count: { $sum: 1 } } }]),
+            AuditLogs.aggregate([
+                { $group: { _id: "$action", count: { $sum: 1 } } },
+                { $sort: { count: -1 } },
+                { $limit: 10 },
+            ]),
+            AuditLogs.countDocuments({ createdAt: { $gte: since24h } }),
+        ])
+        res.status(200).json({ success: true, data: { byCategory, bySeverity, topActions, last24Hours: last24h } })
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message })
+    }
+}
+
+module.exports = { getAllAuditLogs, getAuditLogById, getAuditStats }

@@ -1,6 +1,10 @@
 const Subscriptions = require("../Models/Subscription.Schema")
 const Invoices = require("../Models/Invoice.Schema")
+const Customers = require("../Models/Customer.model")
+const Softwares = require("../Models/Softwares.schema")
 const { generateInvoiceNumber } = require("../Utils/invoiceNumber.util")
+const { sendSubscriptionCreatedEmail } = require("../Services/email.service")
+const { logEmailSent } = require("../Services/auditlog.service")
 
 // List subscriptions with status, paymentStatus, billingCycle filters and pagination
 const getAllSubscriptions = async (req, res) => {
@@ -48,18 +52,63 @@ const createSubscription = async (req, res) => {
         const invoiceNumber = await generateInvoiceNumber()
         const invoice = new Invoices({
             invoiceNumber,
-            customer: subscription.customer,
+            customer:     subscription.customer,
             subscription: subscription._id,
-            software: subscription.softwares,
-            amount: subscription.amountCharged,
-            totalAmount: subscription.amountCharged,
-            invoiceType: "NewPurchase",
-            periodFrom: subscription.buyDate || new Date(),
-            periodTo: new Date(subscription.renewalDate),
+            software:     subscription.softwares,
+            amount:       subscription.amountCharged,
+            totalAmount:  subscription.amountCharged,
+            invoiceType:  "NewPurchase",
+            periodFrom:   subscription.buyDate || new Date(),
+            periodTo:     new Date(subscription.renewalDate),
             paymentStatus: subscription.paymentStatus || "Pending",
-            createdBy: req.user.id,
+            createdBy:    req.user.id,
         })
         await invoice.save()
+
+        // Emails only for SuperAdmin / Admin — Standard users never trigger emails
+        if (req.user.role !== "Standard" && process.env.EMAIL_SEND_SUBSCRIPTION === "true") {
+            Promise.all([
+                Customers.findById(subscription.customer).populate("serviceUser", "name email"),
+                Softwares.findById(subscription.softwares).select("name type"),
+            ]).then(([cust, soft]) => {
+                if (!cust) return
+                const base = {
+                    customerName:  cust.name,
+                    customerEmail: cust.email,
+                    softwareName:  soft?.name,
+                    softwareType:  soft?.type,
+                    buyDate:       subscription.buyDate,
+                    renewalDate:   subscription.renewalDate,
+                    billingCycle:  subscription.billingCycle,
+                    amount:        subscription.amountCharged,
+                    paymentStatus: subscription.paymentStatus,
+                    invoiceNumber: invoice.invoiceNumber,
+                    periodFrom:    invoice.periodFrom,
+                    periodTo:      invoice.periodTo,
+                }
+
+                // Email to customer
+                sendSubscriptionCreatedEmail(cust.email, { ...base, isInternal: false })
+                    .then(() => logEmailSent(req.user.id, { to: cust.email, subject: "New Subscription Created", type: "SubscriptionCreated", targetId: subscription.customer, targetModel: "Customers", targetLabel: cust.name, ipAddress: req.ip }))
+                    .catch(() => {})
+
+                // Email to assigned staff (serviceUser)
+                const sv = cust.serviceUser
+                if (sv?.email) {
+                    sendSubscriptionCreatedEmail(sv.email, { ...base, isInternal: true, staffName: sv.name })
+                        .then(() => logEmailSent(req.user.id, { to: sv.email, subject: "New Subscription — Staff Notification", type: "SubscriptionStaffNotice", targetId: subscription.customer, targetModel: "Customers", targetLabel: cust.name, ipAddress: req.ip }))
+                        .catch(() => {})
+                }
+
+                // Email to SuperAdmin
+                const sadminEmail = process.env.SADMIN_EMAIL
+                if (sadminEmail && sadminEmail !== sv?.email) {
+                    sendSubscriptionCreatedEmail(sadminEmail, { ...base, isInternal: true, staffName: "Super Admin" })
+                        .then(() => logEmailSent(req.user.id, { to: sadminEmail, subject: "New Subscription — SuperAdmin Notification", type: "SubscriptionSuperAdminNotice", targetId: subscription.customer, targetModel: "Customers", targetLabel: cust.name, ipAddress: req.ip }))
+                        .catch(() => {})
+                }
+            }).catch(() => {})
+        }
 
         res.status(201).json({ success: true, message: "Subscription created", data: { subscription, invoice } })
     } catch (err) {

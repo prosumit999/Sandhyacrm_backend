@@ -34,8 +34,17 @@ dotenv.config()
 app.use(express.json())
 app.use(express.urlencoded({ extended: true }))
 app.use(cookieParser())
+const allowedOrigins = (process.env.FRONTEND_URL || '')
+    .split(',')
+    .map(o => o.trim())
+    .filter(Boolean)
+
 app.use(cors({
-    origin: process.env.FRONTEND_URL,
+    origin: (origin, cb) => {
+        // allow native/mobile clients (no origin) and any listed origin
+        if (!origin || allowedOrigins.includes(origin)) return cb(null, true)
+        cb(new Error(`CORS: ${origin} not allowed`))
+    },
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
 }))

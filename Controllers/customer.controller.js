@@ -1,6 +1,8 @@
 const Customers = require("../Models/Customer.model")
 const Subscriptions = require("../Models/Subscription.Schema")
 const Invoices = require("../Models/Invoice.Schema")
+const { sendCustomerWelcomeEmail, sendStaffNewCustomerEmail } = require("../Services/email.service")
+const { logEmailSent } = require("../Services/auditlog.service")
 
 // List customers with search, status filter, and pagination; Standard users see only their assigned
 const getAllCustomers = async (req, res) => {
@@ -51,6 +53,49 @@ const createCustomer = async (req, res) => {
 
         const customer = new Customers(req.body)
         await customer.save()
+
+        // Emails only for SuperAdmin / Admin actions — Standard users never trigger emails
+        if (req.user.role !== "Standard" && process.env.EMAIL_SEND_WELCOME === "true") {
+            Customers.findById(customer._id)
+                .populate("serviceUser", "name email")
+                .then(populated => {
+                    if (!populated) return
+                    const d = {
+                        customerName:     populated.name,
+                        customerEmail:    populated.email,
+                        phone:            populated.phone,
+                        whatsapp:         populated.whatsapp,
+                        businessName:     populated.businessName,
+                        subscriptionType: populated.Subscriptions,
+                        city:             populated.address?.city,
+                        state:            populated.address?.state,
+                        notes:            populated.notes,
+                        createdByName:    req.user.name || req.user.email,
+                    }
+                    const sv = populated.serviceUser
+
+                    // Welcome email to the customer
+                    sendCustomerWelcomeEmail(populated.email, { ...d, assignedStaffName: sv?.name })
+                        .then(() => logEmailSent(req.user.id, { to: populated.email, subject: "Customer Welcome", type: "CustomerWelcome", targetId: populated._id, targetModel: "Customers", targetLabel: populated.name, ipAddress: req.ip }))
+                        .catch(() => {})
+
+                    // Internal notification to assigned staff
+                    const notified = new Set()
+                    if (sv?.email) {
+                        notified.add(sv.email)
+                        sendStaffNewCustomerEmail(sv.email, { staffName: sv.name, ...d })
+                            .then(() => logEmailSent(req.user.id, { to: sv.email, subject: "New Customer Assigned", type: "StaffNewCustomer", targetId: populated._id, targetModel: "Customers", targetLabel: populated.name, ipAddress: req.ip }))
+                            .catch(() => {})
+                    }
+                    // Also notify creator if different from assigned staff
+                    if (req.user.email && !notified.has(req.user.email)) {
+                        sendStaffNewCustomerEmail(req.user.email, { staffName: req.user.name || "Admin", ...d })
+                            .then(() => logEmailSent(req.user.id, { to: req.user.email, subject: "New Customer Created", type: "StaffNewCustomer", targetId: populated._id, targetModel: "Customers", targetLabel: populated.name, ipAddress: req.ip }))
+                            .catch(() => {})
+                    }
+                })
+                .catch(() => {})
+        }
 
         res.status(201).json({ success: true, message: "Customer created", data: customer })
     } catch (err) {

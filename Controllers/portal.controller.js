@@ -1,11 +1,14 @@
+const crypto        = require("crypto")
 const bcryptjs      = require("bcryptjs")
 const jwt           = require("jsonwebtoken")
 const Customers     = require("../Models/Customer.model")
+const Users         = require("../Models/user.schema")
 const Subscriptions = require("../Models/Subscription.Schema")
 const Invoices      = require("../Models/Invoice.Schema")
 const Alerts        = require("../Models/Alert.Schema")
 const SupportTickets= require("../Models/SupportTicket.schema")
 const PortalMessage = require("../Models/PortalMessage.schema")
+const { sendPortalWelcomeEmail, sendPortalResetEmail } = require("../Services/email.service")
 
 const COOKIE_OPTS = {
   httpOnly: true,
@@ -184,6 +187,7 @@ const portalCreateTicket = async (req, res) => {
       description,
       createdBy:  customer.serviceUser,
       assignedTo: customer.serviceUser,
+      dueBy:      new Date(Date.now() + 10 * 60 * 1000),
     })
 
     res.status(201).json({ success: true, data: ticket })
@@ -253,7 +257,42 @@ const portalTeam = async (req, res) => {
       .populate("serviceUser", "name email phone role ProfilePhoto")
     if (!customer)
       return res.status(404).json({ success: false, message: "Customer not found" })
-    res.json({ success: true, data: customer.serviceUser })
+
+    const team = []
+
+    // Primary: the assigned Standard user (service manager)
+    if (customer.serviceUser) {
+      const sv = customer.serviceUser.toObject ? customer.serviceUser.toObject() : customer.serviceUser
+      team.push({ ...sv, isPrimary: true })
+    }
+
+    // Include all active SuperAdmin and Admin users
+    const serviceUserId = customer.serviceUser?._id?.toString()
+    const adminUsers = await Users.find({ role: { $in: ["SuperAdmin", "Admin"] }, isActive: true })
+      .select("name email phone role ProfilePhoto")
+      .lean()
+    for (const admin of adminUsers) {
+      if (admin._id.toString() !== serviceUserId) {
+        team.push(admin)
+      }
+    }
+
+    res.json({ success: true, data: team })
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message })
+  }
+}
+
+// ── Unread message count (lightweight polling target) ──────────────────────
+
+const portalUnreadCount = async (req, res) => {
+  try {
+    const count = await PortalMessage.countDocuments({
+      customer: req.customer.id,
+      sender: "team",
+      readByCustomer: false,
+    })
+    res.json({ success: true, unread: count })
   } catch (err) {
     res.status(500).json({ success: false, message: err.message })
   }
@@ -313,7 +352,86 @@ const enablePortalAccess = async (req, res) => {
     if (!customer)
       return res.status(404).json({ success: false, message: "Customer not found" })
 
+    // Send welcome email with credentials when portal access is being enabled with a password
+    if (process.env.EMAIL_SEND_WELCOME === "true" && enable !== false && password && customer.email) {
+      const loginUrl = `${process.env.FRONTEND_URL}/portal/login`
+      sendPortalWelcomeEmail(customer.email, {
+        customerName:  customer.name,
+        portalPassword: password,
+        loginUrl,
+      }).catch(() => {})
+    }
+
     res.json({ success: true, message: "Portal access updated", data: customer })
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message })
+  }
+}
+
+// ── Customer: forgot portal password ─────────────────────────────────────
+
+const portalForgotPassword = async (req, res) => {
+  try {
+    const { email } = req.body
+    if (!email)
+      return res.status(400).json({ success: false, message: "Email is required" })
+
+    const customer = await Customers.findOne({ email: email.toLowerCase().trim() })
+    // Always respond with same message to prevent email enumeration
+    if (!customer || !customer.portalAccess) {
+      return res.json({ success: true, message: "If your account exists, a reset link has been sent to your email." })
+    }
+
+    const rawToken = crypto.randomBytes(32).toString("hex")
+    const hashedToken = crypto.createHash("sha256").update(rawToken).digest("hex")
+
+    customer.portalResetToken   = hashedToken
+    customer.portalResetExpires = new Date(Date.now() + 10 * 60 * 1000) // 10 minutes
+    await customer.save()
+
+    const resetUrl = `${process.env.FRONTEND_URL}/portal/reset-password/${rawToken}`
+
+    try {
+      await sendPortalResetEmail(customer.email, { customerName: customer.name, resetUrl })
+    } catch (emailErr) {
+      console.error("[Portal] Failed to send reset email:", emailErr.message)
+      // In dev, return the token so it can be tested without SMTP
+      if (process.env.NODE_ENV !== "production") {
+        return res.json({ success: true, message: "Email unavailable in dev — use this reset link", resetUrl, resetToken: rawToken })
+      }
+      return res.status(500).json({ success: false, message: "Could not send reset email. Please try again later." })
+    }
+
+    res.json({ success: true, message: "If your account exists, a reset link has been sent to your email." })
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message })
+  }
+}
+
+// ── Customer: reset portal password with token ────────────────────────────
+
+const portalResetPassword = async (req, res) => {
+  try {
+    const { password } = req.body
+    if (!password || password.length < 8)
+      return res.status(400).json({ success: false, message: "Password must be at least 8 characters" })
+
+    const hashedToken = crypto.createHash("sha256").update(req.params.token).digest("hex")
+
+    const customer = await Customers.findOne({
+      portalResetToken:   hashedToken,
+      portalResetExpires: { $gt: new Date() },
+    })
+    if (!customer)
+      return res.status(400).json({ success: false, message: "Reset link is invalid or has expired" })
+
+    const salt = await bcryptjs.genSalt(10)
+    customer.portalPassword      = await bcryptjs.hash(password, salt)
+    customer.portalResetToken    = undefined
+    customer.portalResetExpires  = undefined
+    await customer.save()
+
+    res.json({ success: true, message: "Password reset successful. You can now log in." })
   } catch (err) {
     res.status(500).json({ success: false, message: err.message })
   }
@@ -359,6 +477,59 @@ const adminGetPortalMessages = async (req, res) => {
   }
 }
 
+// ── Customer: update own name and phone ───────────────────────────────────
+
+const portalUpdateMe = async (req, res) => {
+  try {
+    const { name, phone } = req.body
+    if (!name?.trim())
+      return res.status(400).json({ success: false, message: "Name is required" })
+
+    const customer = await Customers.findByIdAndUpdate(
+      req.customer.id,
+      { name: name.trim(), phone: (phone || "").trim() },
+      { new: true, runValidators: true }
+    ).select("-portalPassword -portalResetToken -portalResetExpires")
+
+    if (!customer)
+      return res.status(404).json({ success: false, message: "Customer not found" })
+
+    res.json({ success: true, message: "Profile updated successfully", data: customer })
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message })
+  }
+}
+
+// ── Customer: change portal password ─────────────────────────────────────
+
+const portalChangePassword = async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body
+    if (!currentPassword || !newPassword)
+      return res.status(400).json({ success: false, message: "Current password and new password are required" })
+    if (newPassword.length < 8)
+      return res.status(400).json({ success: false, message: "New password must be at least 8 characters" })
+    if (currentPassword === newPassword)
+      return res.status(400).json({ success: false, message: "New password must differ from the current password" })
+
+    const customer = await Customers.findById(req.customer.id)
+    if (!customer)
+      return res.status(404).json({ success: false, message: "Customer not found" })
+
+    const isMatch = await bcryptjs.compare(currentPassword, customer.portalPassword)
+    if (!isMatch)
+      return res.status(401).json({ success: false, message: "Current password is incorrect" })
+
+    const salt = await bcryptjs.genSalt(10)
+    customer.portalPassword = await bcryptjs.hash(newPassword, salt)
+    await customer.save()
+
+    res.json({ success: true, message: "Password changed successfully" })
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message })
+  }
+}
+
 module.exports = {
   portalLogin,
   portalLogout,
@@ -374,7 +545,12 @@ module.exports = {
   portalTeam,
   portalMessages,
   portalSendMessage,
+  portalUnreadCount,
   enablePortalAccess,
   adminReplyPortalMessage,
   adminGetPortalMessages,
+  portalForgotPassword,
+  portalResetPassword,
+  portalUpdateMe,
+  portalChangePassword,
 }

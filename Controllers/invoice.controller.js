@@ -1,5 +1,10 @@
-const Invoices = require("../Models/Invoice.Schema")
+const Invoices    = require("../Models/Invoice.Schema")
+const Customers   = require("../Models/Customer.model")
+const Softwares   = require("../Models/Softwares.schema")
 const { generateInvoiceNumber } = require("../Utils/invoiceNumber.util")
+const { sendDetailedInvoiceEmail, sendPaymentConfirmationEmail } = require("../Services/email.service")
+const { logEmailSent } = require("../Services/auditlog.service")
+const { createPortalNotification } = require("../Services/portalNotification.service")
 
 // List invoices with paymentStatus, invoiceType, customer filters and pagination
 const getAllInvoices = async (req, res) => {
@@ -48,6 +53,43 @@ const createInvoice = async (req, res) => {
         const invoiceNumber = await generateInvoiceNumber()
         const invoice = new Invoices({ ...req.body, invoiceNumber, createdBy: req.user.id })
         await invoice.save()
+
+        // Email customer the full invoice details — only for SuperAdmin / Admin
+        if (req.user.role !== "Standard" && process.env.EMAIL_SEND_INVOICE === "true") {
+            Promise.all([
+                Customers.findById(customer),
+                Softwares.findById(req.body.software).select("name type"),
+            ]).then(([cust, soft]) => {
+                if (!cust?.email) return
+                sendDetailedInvoiceEmail(cust.email, {
+                    customerName:  cust.name,
+                    invoiceNumber,
+                    softwareName:  soft?.name,
+                    softwareType:  soft?.type,
+                    amount:        req.body.amount,
+                    tax:           req.body.tax,
+                    discount:      req.body.discount,
+                    totalAmount:   req.body.totalAmount,
+                    invoiceType:   req.body.invoiceType,
+                    periodFrom:    req.body.periodFrom,
+                    periodTo:      req.body.periodTo,
+                    paymentStatus: req.body.paymentStatus,
+                    dueDate:       req.body.dueDate,
+                })
+                .then(() => logEmailSent(req.user.id, { to: cust.email, subject: `Invoice ${invoiceNumber}`, type: "InvoiceGenerated", targetId: cust._id, targetModel: "Customers", targetLabel: cust.name, ipAddress: req.ip }))
+                .catch(() => {})
+            }).catch(() => {})
+        }
+
+        // Portal notification for the customer
+        const amt = `₹${Number(req.body.totalAmount || req.body.amount || 0).toLocaleString("en-IN")}`
+        createPortalNotification({
+            customer: customer,
+            type:    "InvoiceCreated",
+            title:   "New invoice issued",
+            message: `A new invoice of ${amt} (${invoiceNumber}) has been issued for your account.`,
+            link:    "/portal/invoices",
+        })
 
         res.status(201).json({ success: true, message: "Invoice created", data: invoice })
     } catch (err) {
@@ -101,14 +143,30 @@ const markInvoicePaid = async (req, res) => {
             return res.status(400).json({ success: false, message: "paymentMethod is required" })
         }
 
+        const paidDate = paymentDate || new Date()
         const invoice = await Invoices.findByIdAndUpdate(
             req.params.id,
-            { paymentStatus: "Paid", paymentMethod, transactionId, paymentDate: paymentDate || new Date() },
+            { paymentStatus: "Paid", paymentMethod, transactionId, paymentDate: paidDate },
             { new: true }
-        )
+        ).populate("customer", "name email")
+
         if (!invoice) {
             return res.status(404).json({ success: false, message: "Invoice not found" })
         }
+
+        // Email payment confirmation when EMAIL_SEND_PAYMENT_CONFIRMATION is enabled
+        if (process.env.EMAIL_SEND_PAYMENT_CONFIRMATION === "true" && invoice.customer?.email) {
+            sendPaymentConfirmationEmail(invoice.customer.email, {
+                customerName:  invoice.customer.name,
+                invoiceNumber: invoice.invoiceNumber,
+                totalAmount:   invoice.totalAmount,
+                paymentDate:   paidDate,
+                paymentMethod,
+            })
+            .then(() => logEmailSent(req.user.id, { to: invoice.customer.email, subject: `Payment Confirmed — ${invoice.invoiceNumber}`, type: "PaymentConfirmation", targetId: invoice.customer._id, targetModel: "Customers", targetLabel: invoice.customer.name, ipAddress: req.ip }))
+            .catch(() => {})
+        }
+
         res.status(200).json({ success: true, message: "Invoice marked as paid", data: invoice })
     } catch (err) {
         res.status(500).json({ success: false, message: err.message })
