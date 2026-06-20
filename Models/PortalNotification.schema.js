@@ -9,7 +9,7 @@ const PortalNotificationSchema = mongoose.Schema(
         },
         type: {
             type: String,
-            enum: ["InvoiceCreated", "TicketReplied", "TicketResolved", "AlertCreated", "RenewalReminder", "Custom"],
+            enum: ["InvoiceCreated", "TicketReplied", "TicketResolved", "AlertCreated", "RenewalReminder", "MessageReceived", "Custom"],
             required: true,
         },
         title:   { type: String, required: true, trim: true },

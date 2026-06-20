@@ -1,13 +1,34 @@
 const nodemailer = require("nodemailer")
+const Settings   = require("../Models/Settings.schema")
 
 // ── Transport ──────────────────────────────────────────────────────────────────
 const createTransporter = () =>
     nodemailer.createTransport({
-        host:   process.env.SMTP_HOST,
-        port:   Number(process.env.SMTP_PORT) || 587,
-        secure: process.env.SMTP_SECURE === "true",
-        auth:   { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
+        host:       process.env.SMTP_HOST,
+        port:       Number(process.env.SMTP_PORT) || 587,
+        secure:     process.env.SMTP_SECURE === "true",
+        requireTLS: process.env.SMTP_SECURE !== "true",
+        auth:       { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
+        tls:        { rejectUnauthorized: false },
     })
+
+// ── Theme loader — reads DB once per send call ─────────────────────────────────
+const loadEmailTheme = async () => {
+    try {
+        const s = await Settings.findOne().lean()
+        return {
+            brandColor:  (s?.emailBrandColor  || "").trim() || "#1a73e8",
+            alertColor:  (s?.emailAlertColor  || "").trim() || "#f59e0b",
+            footerPhone: (s?.emailFooterPhone || "").trim() || process.env.COMPANY_PHONE || "",
+        }
+    } catch {
+        return {
+            brandColor:  "#1a73e8",
+            alertColor:  "#f59e0b",
+            footerPhone: process.env.COMPANY_PHONE || "",
+        }
+    }
+}
 
 // ── Layout helpers ─────────────────────────────────────────────────────────────
 const co      = () => process.env.COMPANY_NAME || "CRM"
@@ -32,13 +53,16 @@ const section = (title, rows) =>
     tbl(rows) +
     "</div></div>"
 
-const branded = (body, accent) => {
+// accent   = header bar colour
+// footerPhone = phone shown in footer (empty string = omit)
+const branded = (body, accent, footerPhone) => {
     const color = accent || "#1a73e8"
+    const phone = footerPhone !== undefined ? footerPhone : (process.env.COMPANY_PHONE || "")
     const footer =
         "<hr style='margin:28px 0;border:none;border-top:1px solid #e5e7eb'/>" +
         "<p style='margin:0;color:#9ca3af;font-size:12px'>" +
         co() + " &nbsp;|&nbsp; " + (process.env.COMPANY_EMAIL || "") +
-        (process.env.COMPANY_PHONE ? " &nbsp;|&nbsp; " + process.env.COMPANY_PHONE : "") +
+        (phone ? " &nbsp;|&nbsp; " + phone : "") +
         "</p>"
     return (
         "<div style='font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#fff'>" +
@@ -61,13 +85,15 @@ const send = async (to, subject, html) => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const sendResetEmail = async (email, rawToken) => {
+    const theme    = await loadEmailTheme()
     const resetUrl = process.env.FRONTEND_URL + "/reset-password/" + rawToken
     await send(email, co() + " — Password Reset Request", branded(
         "<p style='margin:0 0 12px'>You requested a password reset for your " + co() + " account.</p>" +
         "<p>Click the button below — this link expires in <strong>10 minutes</strong>.</p>" +
-        "<a href='" + resetUrl + "' style='display:inline-block;background:#1a73e8;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:600;margin:16px 0'>Reset Password</a>" +
+        "<a href='" + resetUrl + "' style='display:inline-block;background:" + theme.brandColor + ";color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:600;margin:16px 0'>Reset Password</a>" +
         "<p style='color:#6b7280;font-size:13px'>If you did not request this, ignore this email.</p>" +
-        "<p style='color:#9ca3af;font-size:11px'>Link: " + resetUrl + "</p>"
+        "<p style='color:#9ca3af;font-size:11px'>Link: " + resetUrl + "</p>",
+        theme.brandColor, theme.footerPhone
     ))
 }
 
@@ -80,6 +106,7 @@ const sendCustomerWelcomeEmail = async (email, {
     customerName, phone, whatsapp, businessName, subscriptionType,
     city, state, assignedStaffName,
 }) => {
+    const theme = await loadEmailTheme()
     const cityState = city ? city + (state ? ", " + state : "") : state
     await send(
         email,
@@ -96,8 +123,9 @@ const sendCustomerWelcomeEmail = async (email, {
                 tr("Account Manager", assignedStaffName)
             ) +
             "<p style='color:#374151'>If you have any questions, please reach us at <a href='mailto:" +
-            (process.env.COMPANY_EMAIL || "") + "' style='color:#1a73e8'>" + (process.env.COMPANY_EMAIL || "") + "</a>.</p>" +
-            "<p style='color:#374151'>Thank you for choosing " + co() + ".</p>"
+            (process.env.COMPANY_EMAIL || "") + "' style='color:" + theme.brandColor + "'>" + (process.env.COMPANY_EMAIL || "") + "</a>.</p>" +
+            "<p style='color:#374151'>Thank you for choosing " + co() + ".</p>",
+            theme.brandColor, theme.footerPhone
         )
     )
 }
@@ -107,6 +135,7 @@ const sendStaffNewCustomerEmail = async (email, {
     staffName, customerName, customerEmail, phone, whatsapp, businessName,
     subscriptionType, city, state, notes, createdByName,
 }) => {
+    const theme = await loadEmailTheme()
     const cityState = city ? city + (state ? ", " + state : "") : state
     await send(
         email,
@@ -126,7 +155,7 @@ const sendStaffNewCustomerEmail = async (email, {
                 tr("Created By",     createdByName)
             ) +
             "<p style='color:#374151'>Please log in to the CRM to view the full customer profile and get started.</p>",
-            "#0f766e"
+            theme.brandColor, theme.footerPhone
         )
     )
 }
@@ -142,6 +171,7 @@ const sendSoftwareInternalEmail = async (email, {
     sslExpiryDate, status, version, price, billingCycle, developerName, managedByName,
     teamName, isUpdate,
 }) => {
+    const theme  = await loadEmailTheme()
     const action = isUpdate ? "Updated" : "Added"
     await send(
         email,
@@ -159,10 +189,10 @@ const sendSoftwareInternalEmail = async (email, {
                 tr("Billing Cycle",billingCycle)
             ) +
             section("URLs",
-                tr("Live URL",     liveUrl    ? "<a href='" + liveUrl + "' style='color:#1a73e8'>" + liveUrl + "</a>" : null) +
-                tr("Play Store",   playStoreUrl ? "<a href='" + playStoreUrl + "' style='color:#1a73e8'>" + playStoreUrl + "</a>" : null) +
-                tr("App Store",    appStoreUrl  ? "<a href='" + appStoreUrl  + "' style='color:#1a73e8'>" + appStoreUrl  + "</a>" : null) +
-                tr("Download URL", downloadUrl  ? "<a href='" + downloadUrl  + "' style='color:#1a73e8'>" + downloadUrl  + "</a>" : null)
+                tr("Live URL",     liveUrl    ? "<a href='" + liveUrl + "' style='color:" + theme.brandColor + "'>" + liveUrl + "</a>" : null) +
+                tr("Play Store",   playStoreUrl ? "<a href='" + playStoreUrl + "' style='color:" + theme.brandColor + "'>" + playStoreUrl + "</a>" : null) +
+                tr("App Store",    appStoreUrl  ? "<a href='" + appStoreUrl  + "' style='color:" + theme.brandColor + "'>" + appStoreUrl  + "</a>" : null) +
+                tr("Download URL", downloadUrl  ? "<a href='" + downloadUrl  + "' style='color:" + theme.brandColor + "'>" + downloadUrl  + "</a>" : null)
             ) +
             section("Hosting & Domain",
                 tr("Hosting Provider", hostingProvider) +
@@ -177,7 +207,7 @@ const sendSoftwareInternalEmail = async (email, {
                 tr("Team",       teamName)
             ) +
             "<p style='color:#374151'>Please log in to the CRM for full details.</p>",
-            "#7c3aed"
+            theme.brandColor, theme.footerPhone
         )
     )
 }
@@ -193,6 +223,7 @@ const sendSubscriptionCreatedEmail = async (email, {
     invoiceNumber, periodFrom, periodTo,
     isInternal,
 }) => {
+    const theme = await loadEmailTheme()
     const subjectCustomer = "Your Subscription to " + softwareName + " is Active — " + co()
     const subjectInternal = "New Subscription Created — " + customerName + " / " + softwareName + " — " + co()
 
@@ -232,7 +263,7 @@ const sendSubscriptionCreatedEmail = async (email, {
                 ? "<p style='color:#374151'>Log in to the CRM to view or manage this subscription.</p>"
                 : "<p style='color:#374151'>Thank you for your business. Please contact us if you have any questions.</p>"
             ),
-            isInternal ? "#0f766e" : "#1a73e8"
+            theme.brandColor, theme.footerPhone
         )
     )
 }
@@ -246,6 +277,7 @@ const sendDetailedInvoiceEmail = async (email, {
     amount, tax, discount, totalAmount, invoiceType,
     periodFrom, periodTo, paymentStatus, dueDate,
 }) => {
+    const theme = await loadEmailTheme()
     await send(
         email,
         "Invoice " + invoiceNumber + " — " + co(),
@@ -271,8 +303,9 @@ const sendDetailedInvoiceEmail = async (email, {
                 tr("Payment Status", paymentStatus)
             ) +
             "<p style='color:#374151'>If you have any questions about this invoice, please contact us at <a href='mailto:" +
-            (process.env.COMPANY_EMAIL || "") + "' style='color:#1a73e8'>" + (process.env.COMPANY_EMAIL || "") + "</a>.</p>" +
-            "<p style='color:#374151'>Thank you for your business.</p>"
+            (process.env.COMPANY_EMAIL || "") + "' style='color:" + theme.brandColor + "'>" + (process.env.COMPANY_EMAIL || "") + "</a>.</p>" +
+            "<p style='color:#374151'>Thank you for your business.</p>",
+            theme.brandColor, theme.footerPhone
         )
     )
 }
@@ -283,7 +316,9 @@ const sendDetailedInvoiceEmail = async (email, {
 
 // External — sent to customer when a Client alert is created
 const sendCustomerAlertEmail = async (email, { customerName, title, message, severity, dueDate }) => {
-    const severityColor = severity === "Urgent" ? "#dc2626" : severity === "Warning" ? "#d97706" : "#2563eb"
+    const theme = await loadEmailTheme()
+    // Urgent and Warning use standard semantic colors; Info uses the configurable alert color
+    const severityColor = severity === "Urgent" ? "#dc2626" : severity === "Warning" ? "#d97706" : theme.alertColor
     const severityLabel = severity || "Info"
     await send(
         email,
@@ -296,7 +331,7 @@ const sendCustomerAlertEmail = async (email, { customerName, title, message, sev
                 ? "<p style='margin:16px 0 0;color:#6b7280;font-size:13px'>Due date: <strong>" + fmtDate(dueDate) + "</strong></p>"
                 : ""
             ),
-            severityColor
+            severityColor, theme.footerPhone
         )
     )
 }
@@ -305,7 +340,8 @@ const sendCustomerAlertEmail = async (email, { customerName, title, message, sev
 const sendAlertStaffEmail = async (email, {
     staffName, customerName, alertType, subType, title, message, severity, dueDate,
 }) => {
-    const severityColor = severity === "Urgent" ? "#dc2626" : severity === "Warning" ? "#d97706" : "#2563eb"
+    const theme = await loadEmailTheme()
+    const severityColor = severity === "Urgent" ? "#dc2626" : severity === "Warning" ? "#d97706" : theme.alertColor
     const severityLabel = severity || "Info"
     await send(
         email,
@@ -323,7 +359,7 @@ const sendAlertStaffEmail = async (email, {
                 tr("Due Date",   fmtDate(dueDate))
             ) +
             "<p style='color:#374151'>Please log in to the CRM to review and take action on this alert.</p>",
-            severityColor
+            severityColor, theme.footerPhone
         )
     )
 }
@@ -333,6 +369,7 @@ const sendAlertStaffEmail = async (email, {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const sendPortalWelcomeEmail = async (email, { customerName, portalPassword, loginUrl }) => {
+    const theme = await loadEmailTheme()
     await send(
         email,
         "Your Customer Portal Access — " + co(),
@@ -344,24 +381,27 @@ const sendPortalWelcomeEmail = async (email, { customerName, portalPassword, log
                 tr("Password", portalPassword)
             ) +
             (loginUrl
-                ? "<a href='" + loginUrl + "' style='display:inline-block;background:#1a73e8;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:600;margin:8px 0'>Access Your Portal &rarr;</a>"
+                ? "<a href='" + loginUrl + "' style='display:inline-block;background:" + theme.brandColor + ";color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:600;margin:8px 0'>Access Your Portal &rarr;</a>"
                 : ""
             ) +
-            "<p style='margin:16px 0 0;color:#6b7280;font-size:13px'>Please change your password after first login.</p>"
+            "<p style='margin:16px 0 0;color:#6b7280;font-size:13px'>Please change your password after first login.</p>",
+            theme.brandColor, theme.footerPhone
         )
     )
 }
 
 const sendPortalResetEmail = async (email, { customerName, resetUrl }) => {
+    const theme = await loadEmailTheme()
     await send(
         email,
         "Reset Your Portal Password — " + co(),
         branded(
             "<p>Dear <strong>" + customerName + "</strong>,</p>" +
             "<p>We received a request to reset your customer portal password. Click the button below — this link expires in <strong>10 minutes</strong>.</p>" +
-            "<a href='" + resetUrl + "' style='display:inline-block;background:#1a73e8;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:600;margin:16px 0'>Reset Password</a>" +
+            "<a href='" + resetUrl + "' style='display:inline-block;background:" + theme.brandColor + ";color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:600;margin:16px 0'>Reset Password</a>" +
             "<p style='color:#6b7280;font-size:13px'>If you did not request this, ignore this email.</p>" +
-            "<p style='color:#9ca3af;font-size:11px'>Link: " + resetUrl + "</p>"
+            "<p style='color:#9ca3af;font-size:11px'>Link: " + resetUrl + "</p>",
+            theme.brandColor, theme.footerPhone
         )
     )
 }
@@ -373,6 +413,7 @@ const sendPortalResetEmail = async (email, { customerName, resetUrl }) => {
 const sendPaymentConfirmationEmail = async (email, {
     customerName, invoiceNumber, totalAmount, paymentDate, paymentMethod,
 }) => {
+    const theme = await loadEmailTheme()
     await send(
         email,
         "Payment Received — Invoice " + invoiceNumber + " — " + co(),
@@ -386,7 +427,7 @@ const sendPaymentConfirmationEmail = async (email, {
                 tr("Payment Via",  paymentMethod)
             ) +
             "<p style='color:#374151'>Thank you for your business.</p>",
-            "#16a34a"
+            theme.brandColor, theme.footerPhone
         )
     )
 }

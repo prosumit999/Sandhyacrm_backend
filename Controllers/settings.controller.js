@@ -6,6 +6,7 @@ const ALLOWED_FIELDS = [
   'address', 'city', 'state', 'pincode',
   'phone', 'email',
   'bankName', 'bankAccount', 'bankIfsc', 'bankBranch',
+  'emailBrandColor', 'emailAlertColor', 'emailFooterPhone',
 ]
 
 // GET /api/v1/settings  — all authenticated roles

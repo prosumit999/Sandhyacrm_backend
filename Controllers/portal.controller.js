@@ -9,6 +9,7 @@ const Alerts        = require("../Models/Alert.Schema")
 const SupportTickets= require("../Models/SupportTicket.schema")
 const PortalMessage = require("../Models/PortalMessage.schema")
 const { sendPortalWelcomeEmail, sendPortalResetEmail } = require("../Services/email.service")
+const { createPortalNotification } = require("../Services/portalNotification.service")
 
 const COOKIE_OPTS = {
   httpOnly: true,
@@ -454,6 +455,15 @@ const adminReplyPortalMessage = async (req, res) => {
       readByCustomer: false,
     })
     const populated = await PortalMessage.findById(msg._id).populate("teamUser", "name role ProfilePhoto")
+
+    createPortalNotification({
+      customer: req.params.customerId,
+      type:     "MessageReceived",
+      title:    "New message from the team",
+      message:  `You have a new message from ${populated.teamUser?.name || "the support team"}.`,
+      link:     "/portal/messages",
+    })
+
     res.status(201).json({ success: true, data: populated })
   } catch (err) {
     res.status(500).json({ success: false, message: err.message })

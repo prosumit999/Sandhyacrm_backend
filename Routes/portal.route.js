@@ -2,6 +2,8 @@ const express  = require("express")
 const router   = express.Router()
 const verifyPortalCustomer = require("../Middlewares/portal.auth")
 const checkroles = require("../Middlewares/role.permissions")
+const Settings = require("../Models/Settings.schema")
+
 const {
   portalLogin,
   portalLogout,
@@ -42,6 +44,23 @@ router.post("/auth/login",                       portalLogin)
 router.post("/auth/logout",                      portalLogout)
 router.post("/auth/forgot-password",             portalForgotPassword)
 router.post("/auth/reset-password/:token",       portalResetPassword)
+
+// ── Public portal helpers ─────────────────────────────────────────────────
+router.get("/org-settings", verifyPortalCustomer, async (req, res) => {
+  try {
+    const s = await Settings.findOne().lean() || {}
+    res.json({ success: true, data: {
+      orgName: s.orgName || '', orgTagline: s.orgTagline || '',
+      gstin: s.gstin || '', pan: s.pan || '', cin: s.cin || '',
+      address: s.address || '', city: s.city || '', state: s.state || '', pincode: s.pincode || '',
+      phone: s.phone || '', email: s.email || '',
+      bankName: s.bankName || '', bankAccount: s.bankAccount || '',
+      bankIfsc: s.bankIfsc || '', bankBranch: s.bankBranch || '',
+    }})
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message })
+  }
+})
 
 // ── Customer portal (portaltoken) ─────────────────────────────────────────
 router.get("/auth/me",             verifyPortalCustomer, portalMe)

@@ -25,6 +25,11 @@ const SettingsSchema = mongoose.Schema(
     bankAccount: { type: String, default: '', trim: true },
     bankIfsc:    { type: String, default: '', trim: true },
     bankBranch:  { type: String, default: '', trim: true },
+
+    // Email branding
+    emailBrandColor: { type: String, default: '#1a73e8', trim: true },
+    emailAlertColor: { type: String, default: '#f59e0b', trim: true },
+    emailFooterPhone: { type: String, default: '', trim: true },
   },
   { timestamps: true }
 )
