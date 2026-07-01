@@ -10,12 +10,7 @@ const SupportTickets= require("../Models/SupportTicket.schema")
 const PortalMessage = require("../Models/PortalMessage.schema")
 const { sendPortalWelcomeEmail, sendPortalResetEmail } = require("../Services/email.service")
 const { createPortalNotification } = require("../Services/portalNotification.service")
-
-const COOKIE_OPTS = {
-  httpOnly: true,
-  sameSite: "lax",
-  maxAge:   7 * 24 * 60 * 60 * 1000, // 7 days
-}
+const { authCookieOptions, clearCookieOptions } = require("../Utils/cookie.util")
 
 // ── Auth ───────────────────────────────────────────────────────────────────
 
@@ -43,7 +38,7 @@ const portalLogin = async (req, res) => {
       { expiresIn: "7d" }
     )
 
-    res.cookie("portaltoken", token, COOKIE_OPTS)
+    res.cookie("portaltoken", token, authCookieOptions(7 * 24 * 60 * 60 * 1000))
     res.json({
       success: true,
       message: "Logged in",
@@ -61,7 +56,7 @@ const portalLogin = async (req, res) => {
 }
 
 const portalLogout = (req, res) => {
-  res.clearCookie("portaltoken")
+  res.clearCookie("portaltoken", clearCookieOptions())
   res.json({ success: true, message: "Logged out" })
 }
 

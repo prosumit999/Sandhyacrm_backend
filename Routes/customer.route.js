@@ -10,9 +10,11 @@ const {
     getCustomerSubscriptions,
     getCustomerInvoices,
 } = require("../Controllers/customer.controller")
+const { exportCustomers } = require("../Controllers/export.controller")
 
 router.get("/", checkroles("SuperAdmin", "Admin", "Standard"), getAllCustomers)
 router.post("/", checkroles("SuperAdmin", "Admin", "Standard"), createCustomer)
+router.get("/export", checkroles("SuperAdmin", "Admin", "Standard"), exportCustomers)
 
 router.get("/:id", checkroles("SuperAdmin", "Admin", "Standard"), getCustomerById)
 router.put("/:id", checkroles("SuperAdmin", "Admin", "Standard"), updateCustomer)

@@ -4,6 +4,7 @@ const jwt = require("jsonwebtoken")
 const Users = require("../Models/user.schema")
 const { sendResetEmail } = require("../Services/email.service")
 const { writeAuditLog, logEmailSent } = require("../Services/auditlog.service")
+const { authCookieOptions, clearCookieOptions } = require("../Utils/cookie.util")
 
 // Sign a short-lived access token and a long-lived refresh token, set both as httpOnly cookies
 const signAndSetCookies = (res, user) => {
@@ -18,14 +19,8 @@ const signAndSetCookies = (res, user) => {
         { expiresIn: "7d" }
     )
 
-    res.cookie("logintoken", accessToken, {
-        httpOnly: true,
-        maxAge: 15 * 60 * 1000,
-    })
-    res.cookie("refreshToken", refreshToken, {
-        httpOnly: true,
-        maxAge: 7 * 24 * 60 * 60 * 1000,
-    })
+    res.cookie("logintoken", accessToken, authCookieOptions(15 * 60 * 1000))
+    res.cookie("refreshToken", refreshToken, authCookieOptions(7 * 24 * 60 * 60 * 1000))
 
     return { accessToken, refreshToken }
 }
@@ -75,8 +70,8 @@ const logout = async (req, res) => {
         if (req.user) {
             writeAuditLog({ category: "Security", action: "Logout", performedBy: req.user.id, targetModel: "Users", targetId: req.user.id, targetLabel: req.user.email, severity: "info", ipAddress: req.ip }).catch(() => {})
         }
-        res.clearCookie("logintoken", { httpOnly: true })
-        res.clearCookie("refreshToken", { httpOnly: true })
+        res.clearCookie("logintoken", clearCookieOptions())
+        res.clearCookie("refreshToken", clearCookieOptions())
         res.status(200).json({ success: true, message: "Logged out successfully" })
     } catch (err) {
         res.status(500).json({ success: false, message: err.message })
@@ -102,15 +97,12 @@ const refreshToken = async (req, res) => {
             process.env.JWT_SEC,
             { expiresIn: "15m" }
         )
-        res.cookie("logintoken", newAccessToken, {
-            httpOnly: true,
-            maxAge: 15 * 60 * 1000,
-        })
+        res.cookie("logintoken", newAccessToken, authCookieOptions(15 * 60 * 1000))
 
         res.status(200).json({ success: true, message: "Token refreshed" })
     } catch (err) {
-        res.clearCookie("logintoken")
-        res.clearCookie("refreshToken")
+        res.clearCookie("logintoken", clearCookieOptions())
+        res.clearCookie("refreshToken", clearCookieOptions())
         res.status(401).json({ success: false, message: "Session expired, please login again" })
     }
 }
@@ -194,6 +186,13 @@ const resetPassword = async (req, res) => {
 // Public self-registration — always creates a Standard role account
 const register = async (req, res) => {
     try {
+        if (process.env.ALLOW_PUBLIC_REGISTRATION !== "true") {
+            return res.status(403).json({
+                success: false,
+                message: "Public registration is disabled. Ask an administrator to create your account.",
+            })
+        }
+
         const { name, email, phone, password } = req.body
         if (!name || !email || !phone || !password) {
             return res.status(400).json({ success: false, message: "Name, email, phone and password are required" })

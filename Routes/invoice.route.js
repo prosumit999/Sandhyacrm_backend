@@ -8,9 +8,11 @@ const {
     updateInvoice,
     markInvoicePaid,
 } = require("../Controllers/invoice.controller")
+const { exportInvoices } = require("../Controllers/export.controller")
 
 router.get("/", checkroles("SuperAdmin", "Admin", "Standard"), getAllInvoices)
 router.post("/", checkroles("SuperAdmin", "Admin"), createInvoice)
+router.get("/export", checkroles("SuperAdmin", "Admin", "Standard"), exportInvoices)
 
 router.get("/:id", checkroles("SuperAdmin", "Admin", "Standard"), getInvoiceById)
 router.put("/:id", checkroles("SuperAdmin", "Admin"), updateInvoice)

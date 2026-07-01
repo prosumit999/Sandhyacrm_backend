@@ -39,10 +39,26 @@ const allowedOrigins = (process.env.FRONTEND_URL || '')
     .map(o => o.trim())
     .filter(Boolean)
 
+const devOriginPatterns = [
+    /^http:\/\/localhost:\d+$/,
+    /^http:\/\/127\.0\.0\.1:\d+$/,
+    /^http:\/\/10\.\d+\.\d+\.\d+:\d+$/,
+    /^http:\/\/172\.(1[6-9]|2\d|3[01])\.\d+\.\d+:\d+$/,
+    /^http:\/\/192\.168\.\d+\.\d+:\d+$/,
+]
+
+const isAllowedOrigin = (origin) => {
+    if (!origin || allowedOrigins.includes(origin)) return true
+    if (process.env.NODE_ENV !== "production") {
+        return devOriginPatterns.some(pattern => pattern.test(origin))
+    }
+    return false
+}
+
 app.use(cors({
     origin: (origin, cb) => {
         // allow native/mobile clients (no origin) and any listed origin
-        if (!origin || allowedOrigins.includes(origin)) return cb(null, true)
+        if (isAllowedOrigin(origin)) return cb(null, true)
         cb(new Error(`CORS: ${origin} not allowed`))
     },
     credentials: true,
@@ -89,7 +105,10 @@ const server = http.createServer(app)
 
 const io = new Server(server, {
   cors: {
-    origin: process.env.FRONTEND_URL,
+    origin: (origin, cb) => {
+      if (isAllowedOrigin(origin)) return cb(null, true)
+      cb(new Error(`CORS: ${origin} not allowed`))
+    },
     credentials: true,
     methods: ["GET", "POST"],
   },

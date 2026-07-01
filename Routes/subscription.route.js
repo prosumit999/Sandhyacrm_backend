@@ -9,9 +9,11 @@ const {
     deleteSubscription,
     renewSubscription,
 } = require("../Controllers/subscription.controller")
+const { exportSubscriptions } = require("../Controllers/export.controller")
 
 router.get("/", checkroles("SuperAdmin", "Admin", "Standard"), getAllSubscriptions)
 router.post("/", checkroles("SuperAdmin", "Admin"), createSubscription)
+router.get("/export", checkroles("SuperAdmin", "Admin", "Standard"), exportSubscriptions)
 
 router.get("/:id", checkroles("SuperAdmin", "Admin", "Standard"), getSubscriptionById)
 router.put("/:id", checkroles("SuperAdmin", "Admin"), updateSubscription)

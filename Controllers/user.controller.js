@@ -3,6 +3,7 @@ const bcryptjs = require("bcryptjs")
 const jwt = require("jsonwebtoken")
 const { getPaginationParams, buildPaginationMeta } = require("../Utils/pagination.util")
 const { writeAuditLog } = require("../Services/auditlog.service")
+const { authCookieOptions, clearCookieOptions } = require("../Utils/cookie.util")
 
 const getAllUsers = async (req, res) => {
     try {
@@ -223,7 +224,7 @@ const loginUser = async (req, res) => {
 
         const token = jwt.sign({ id: user._id, email: user.email, role: user.role }, process.env.JWT_SEC, { expiresIn: "2d" })
 
-        res.cookie("logintoken", token, { httpOnly: true, maxAge: 2 * 24 * 60 * 60 * 1000 })
+        res.cookie("logintoken", token, authCookieOptions(2 * 24 * 60 * 60 * 1000))
 
         user.lastLogin = new Date()
         await user.save()
@@ -240,7 +241,7 @@ const loginUser = async (req, res) => {
 
 const logOut = async (req, res) => {
     try {
-        res.clearCookie("logintoken", { httpOnly: true })
+        res.clearCookie("logintoken", clearCookieOptions())
         res.status(200).json({ success: true, message: "Logged out successfully" })
     } catch (err) {
         res.status(500).json({ success: false, message: err.message })
