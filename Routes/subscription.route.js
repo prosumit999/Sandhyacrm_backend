@@ -11,11 +11,11 @@ const {
 } = require("../Controllers/subscription.controller")
 const { exportSubscriptions } = require("../Controllers/export.controller")
 
-router.get("/", checkroles("SuperAdmin", "Admin", "Standard"), getAllSubscriptions)
+router.get("/", checkroles("SuperAdmin", "Admin"), getAllSubscriptions)
 router.post("/", checkroles("SuperAdmin", "Admin"), createSubscription)
-router.get("/export", checkroles("SuperAdmin", "Admin", "Standard"), exportSubscriptions)
+router.get("/export", checkroles("SuperAdmin", "Admin"), exportSubscriptions)
 
-router.get("/:id", checkroles("SuperAdmin", "Admin", "Standard"), getSubscriptionById)
+router.get("/:id", checkroles("SuperAdmin", "Admin"), getSubscriptionById)
 router.put("/:id", checkroles("SuperAdmin", "Admin"), updateSubscription)
 router.delete("/:id", checkroles("SuperAdmin", "Admin"), deleteSubscription)
 

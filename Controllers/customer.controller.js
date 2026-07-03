@@ -4,6 +4,21 @@ const Invoices = require("../Models/Invoice.Schema")
 const { sendCustomerWelcomeEmail, sendStaffNewCustomerEmail } = require("../Services/email.service")
 const { logEmailSent } = require("../Services/auditlog.service")
 
+const ensureAssignedCustomerAccess = async (req, res) => {
+    if (req.user.role !== "Standard") return true
+
+    const customer = await Customers.findById(req.params.id).select("serviceUser")
+    if (!customer) {
+        res.status(404).json({ success: false, message: "Customer not found" })
+        return false
+    }
+    if (customer.serviceUser?.toString() !== req.user.id) {
+        res.status(403).json({ success: false, message: "Access denied" })
+        return false
+    }
+    return true
+}
+
 // List customers with search, status filter, and pagination; Standard users see only their assigned
 const getAllCustomers = async (req, res) => {
     try {
@@ -161,6 +176,9 @@ const deleteCustomer = async (req, res) => {
 
 const getCustomerSubscriptions = async (req, res) => {
     try {
+        const allowed = await ensureAssignedCustomerAccess(req, res)
+        if (!allowed) return
+
         const subscriptions = await Subscriptions.find({ customer: req.params.id })
             .populate("softwares", "name type price")
             .sort({ renewalDate: 1 })
@@ -173,6 +191,9 @@ const getCustomerSubscriptions = async (req, res) => {
 
 const getCustomerInvoices = async (req, res) => {
     try {
+        const allowed = await ensureAssignedCustomerAccess(req, res)
+        if (!allowed) return
+
         const invoices = await Invoices.find({ customer: req.params.id })
             .populate("software", "name")
             .sort({ createdAt: -1 })

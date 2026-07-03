@@ -1,9 +1,9 @@
 const nodemailer = require("nodemailer")
 const Settings   = require("../Models/Settings.schema")
 
-// ── Transport ──────────────────────────────────────────────────────────────────
-const createTransporter = () =>
-    nodemailer.createTransport({
+// ── Transport 
+const createTransporter = () => {
+    return nodemailer.createTransport({
         host:       process.env.SMTP_HOST,
         port:       Number(process.env.SMTP_PORT) || 587,
         secure:     process.env.SMTP_SECURE === "true",
@@ -11,8 +11,9 @@ const createTransporter = () =>
         auth:       { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
         tls:        { rejectUnauthorized: false },
     })
+}
 
-// ── Theme loader — reads DB once per send call ─────────────────────────────────
+// Theme loader — reads DB once per send call 
 const loadEmailTheme = async () => {
     try {
         const s = await Settings.findOne().lean()
@@ -30,7 +31,7 @@ const loadEmailTheme = async () => {
     }
 }
 
-// ── Layout helpers ─────────────────────────────────────────────────────────────
+// ── Layout helpers
 const co      = () => process.env.COMPANY_NAME || "CRM"
 const fmtDate = d  => d ? new Date(d).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "—"
 const fmtMoney= n  => (n != null && n !== "") ? "₹" + Number(n).toLocaleString("en-IN") : "—"
@@ -80,9 +81,7 @@ const send = async (to, subject, html) => {
     await t.sendMail({ from: process.env.EMAIL_FROM, replyTo: process.env.EMAIL_REPLY_TO, to, subject, html })
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// AUTH
-// ═══════════════════════════════════════════════════════════════════════════════
+//Auth
 
 const sendResetEmail = async (email, rawToken) => {
     const theme    = await loadEmailTheme()
@@ -97,10 +96,7 @@ const sendResetEmail = async (email, rawToken) => {
     ))
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
 // CUSTOMER CREATED
-// ═══════════════════════════════════════════════════════════════════════════════
-
 // External — welcome email to customer when their account is created
 const sendCustomerWelcomeEmail = async (email, {
     customerName, phone, whatsapp, businessName, subscriptionType,
@@ -160,9 +156,8 @@ const sendStaffNewCustomerEmail = async (email, {
     )
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// SOFTWARE ADDED / UPDATED
-// ═══════════════════════════════════════════════════════════════════════════════
+
+//Send Software Email
 
 // Internal — sent to developer and managedBy when software is created or updated
 const sendSoftwareInternalEmail = async (email, {
@@ -212,9 +207,7 @@ const sendSoftwareInternalEmail = async (email, {
     )
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// SUBSCRIPTION CREATED
-// ═══════════════════════════════════════════════════════════════════════════════
+//send subscription added email
 
 // Shared — set isInternal=true for staff/superadmin, false for customer
 const sendSubscriptionCreatedEmail = async (email, {

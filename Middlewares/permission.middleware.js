@@ -3,7 +3,8 @@
 const requirePermission = (...permissions) => {
     return (req, res, next) => {
         if (!req.user) {
-            return res.status(401).json({ success: false, message: "Authentication required." })
+            return res.status(401).json({ success: false, 
+                message: "Authentication required." })
         }
 
         // SuperAdmin bypasses all permission checks

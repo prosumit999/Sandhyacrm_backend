@@ -1,4 +1,5 @@
 const Communications = require("../Models/Communication.schema")
+const Customers = require("../Models/Customer.model")
 const { getPaginationParams, buildPaginationMeta } = require("../Utils/pagination.util")
 
 // List communications with optional filters; Standard users see only their customers' comms
@@ -12,6 +13,12 @@ const getAllCommunications = async (req, res) => {
         if (direction) query.direction = direction
         if (purpose) query.purpose = purpose
         if (deliveryStatus) query.deliveryStatus = deliveryStatus
+        if (req.user.role === "Standard") {
+            const assignedCustomers = await Customers.find({ serviceUser: req.user.id }).distinct("_id")
+            query.customer = customer && assignedCustomers.some(id => id.toString() === customer)
+                ? customer
+                : { $in: assignedCustomers }
+        }
 
         const [communications, total] = await Promise.all([
             Communications.find(query)
@@ -73,4 +80,9 @@ const deleteCommunication = async (req, res) => {
     }
 }
 
-module.exports = { getAllCommunications, createCommunication, getCommunicationById, deleteCommunication }
+module.exports = {
+    getAllCommunications,
+    createCommunication,
+    getCommunicationById,
+    deleteCommunication,
+}

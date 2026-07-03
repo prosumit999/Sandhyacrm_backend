@@ -36,7 +36,7 @@ const CommunicationSchema = mongoose.Schema(
             enum: ["Sent", "Delivered", "Failed", "Pending", "Read"],
             default: "Pending",
         },
-        // Provider reference ID for delivery status polling (MSG91/Twilio)
+        // Optional external reference for manually logged communication records
         providerMessageId: {
             type: String,
             trim: true,

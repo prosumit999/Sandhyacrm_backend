@@ -3,6 +3,8 @@ const { generateTicketNumber } = require("../Utils/invoiceNumber.util")
 const { getPaginationParams, buildPaginationMeta } = require("../Utils/pagination.util")
 const { createPortalNotification } = require("../Services/portalNotification.service")
 
+const normalizeArray = (value) => Array.isArray(value) ? value : value ? [value] : []
+
 const getAllTickets = async (req, res) => {
     try {
         const { page, limit, skip } = getPaginationParams(req.query)
@@ -42,7 +44,13 @@ const createTicket = async (req, res) => {
         }
 
         const ticketNumber = await generateTicketNumber()
-        const ticket = new SupportTickets({ ...req.body, ticketNumber, createdBy: req.user.id, dueBy: new Date(Date.now() + 10 * 60 * 1000) })
+        const ticket = new SupportTickets({
+            ...req.body,
+            attachments: normalizeArray(req.body.attachments),
+            ticketNumber,
+            createdBy: req.user.id,
+            dueBy: new Date(Date.now() + 10 * 60 * 1000),
+        })
         await ticket.save()
 
         const populated = await ticket.populate([
@@ -73,7 +81,6 @@ const getTicketById = async (req, res) => {
 
 const updateTicket = async (req, res) => {
     try {
-        // Prevent direct write to replies, ticketNumber, createdBy, resolvedAt, closedAt via update
         const { replies, ticketNumber, createdBy, resolvedAt, closedAt, ...safeFields } = req.body
         const ticket = await SupportTickets.findByIdAndUpdate(req.params.id, safeFields, { new: true, runValidators: true })
         if (!ticket) return res.status(404).json({ success: false, message: "Ticket not found" })
@@ -83,7 +90,6 @@ const updateTicket = async (req, res) => {
     }
 }
 
-// SuperAdmin only — enforced at route level
 const deleteTicket = async (req, res) => {
     try {
         const ticket = await SupportTickets.findByIdAndDelete(req.params.id)
@@ -96,8 +102,10 @@ const deleteTicket = async (req, res) => {
 
 const addReply = async (req, res) => {
     try {
-        const { message, isInternal = false, attachments = [] } = req.body
+        const { message, isInternal = false } = req.body
         if (!message) return res.status(400).json({ success: false, message: "message is required" })
+
+        const attachments = normalizeArray(req.body.attachments)
 
         const ticket = await SupportTickets.findByIdAndUpdate(
             req.params.id,
@@ -107,12 +115,10 @@ const addReply = async (req, res) => {
 
         if (!ticket) return res.status(404).json({ success: false, message: "Ticket not found" })
 
-        // Set firstResponseAt only once
         if (!ticket.firstResponseAt) {
             await SupportTickets.findByIdAndUpdate(req.params.id, { firstResponseAt: new Date() })
         }
 
-        // Notify portal customer when a staff member adds a visible reply
         if (!isInternal && ticket.customer) {
             createPortalNotification({
                 customer: ticket.customer,
@@ -157,7 +163,6 @@ const resolveTicket = async (req, res) => {
         )
         if (!ticket) return res.status(404).json({ success: false, message: "Ticket not found" })
 
-        // Notify portal customer that their ticket is resolved
         if (ticket.customer) {
             createPortalNotification({
                 customer: ticket.customer,
@@ -188,7 +193,6 @@ const closeTicket = async (req, res) => {
     }
 }
 
-// Customer satisfaction rating — only allowed after ticket is Resolved or Closed
 const rateTicket = async (req, res) => {
     try {
         const { customerRating } = req.body

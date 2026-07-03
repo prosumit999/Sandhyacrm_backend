@@ -6,10 +6,9 @@ const {
     addMember, removeMember,
 } = require("../Controllers/team.controller")
 
-const anyAuth   = checkroles("SuperAdmin", "Admin", "Standard")
 const adminOnly = checkroles("SuperAdmin", "Admin")
 
-router.get("/",                          anyAuth,   getAllTeams)
+router.get("/",                          adminOnly, getAllTeams)
 router.post("/",                         adminOnly, createTeam)
 router.put("/:id",                       adminOnly, updateTeam)
 router.delete("/:id",                    adminOnly, deleteTeam)

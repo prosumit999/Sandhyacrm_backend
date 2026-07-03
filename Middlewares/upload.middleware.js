@@ -10,7 +10,7 @@ const ALLOWED_MIME_TYPES = [
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024  // 5MB
 
-// Files are stored in memory as Buffer, then streamed to Cloudinary by the controller
+// Files are stored in memory for controllers that opt into multipart handling.
 const storage = multer ? multer.memoryStorage() : null
 
 const fileFilter = (req, file, cb) => {

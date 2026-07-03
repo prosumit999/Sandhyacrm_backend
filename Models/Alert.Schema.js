@@ -30,7 +30,7 @@ const AlertSchema = mongoose.Schema(
     message: {
       type: String,
       required: true,
-      trim: true,           // Full alert message / SMS draft
+      trim: true,
     },
     severity: {
       type: String,
@@ -68,17 +68,6 @@ const AlertSchema = mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "Users",
     },
-    smsSent: {
-      type: Boolean,
-      default: false,
-    },
-    smsSentAt: {
-      type: Date,
-    },
-    smsResponse: {
-      type: String,       
-    },
-
     snoozedUntil: {
       type: Date,
     },

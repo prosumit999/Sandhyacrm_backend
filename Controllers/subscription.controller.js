@@ -6,7 +6,6 @@ const { generateInvoiceNumber } = require("../Utils/invoiceNumber.util")
 const { sendSubscriptionCreatedEmail } = require("../Services/email.service")
 const { logEmailSent } = require("../Services/auditlog.service")
 
-// List subscriptions with status, paymentStatus, billingCycle filters and pagination
 const getAllSubscriptions = async (req, res) => {
     try {
         const { page = 1, limit = 20, status, paymentStatus, billingCycle } = req.query
@@ -48,7 +47,6 @@ const createSubscription = async (req, res) => {
         const subscription = new Subscriptions({ ...req.body, createdBy: req.user.id })
         await subscription.save()
 
-        // Auto-generate a NewPurchase invoice for every new subscription
         const invoiceNumber = await generateInvoiceNumber()
         const invoice = new Invoices({
             invoiceNumber,
@@ -65,7 +63,6 @@ const createSubscription = async (req, res) => {
         })
         await invoice.save()
 
-        // Emails only for SuperAdmin / Admin — Standard users never trigger emails
         if (req.user.role !== "Standard" && process.env.EMAIL_SEND_SUBSCRIPTION === "true") {
             Promise.all([
                 Customers.findById(subscription.customer).populate("serviceUser", "name email"),
@@ -87,24 +84,21 @@ const createSubscription = async (req, res) => {
                     periodTo:      invoice.periodTo,
                 }
 
-                // Email to customer
                 sendSubscriptionCreatedEmail(cust.email, { ...base, isInternal: false })
                     .then(() => logEmailSent(req.user.id, { to: cust.email, subject: "New Subscription Created", type: "SubscriptionCreated", targetId: subscription.customer, targetModel: "Customers", targetLabel: cust.name, ipAddress: req.ip }))
                     .catch(() => {})
 
-                // Email to assigned staff (serviceUser)
                 const sv = cust.serviceUser
                 if (sv?.email) {
                     sendSubscriptionCreatedEmail(sv.email, { ...base, isInternal: true, staffName: sv.name })
-                        .then(() => logEmailSent(req.user.id, { to: sv.email, subject: "New Subscription — Staff Notification", type: "SubscriptionStaffNotice", targetId: subscription.customer, targetModel: "Customers", targetLabel: cust.name, ipAddress: req.ip }))
+                        .then(() => logEmailSent(req.user.id, { to: sv.email, subject: "New Subscription - Staff Notification", type: "SubscriptionStaffNotice", targetId: subscription.customer, targetModel: "Customers", targetLabel: cust.name, ipAddress: req.ip }))
                         .catch(() => {})
                 }
 
-                // Email to SuperAdmin
                 const sadminEmail = process.env.SADMIN_EMAIL
                 if (sadminEmail && sadminEmail !== sv?.email) {
                     sendSubscriptionCreatedEmail(sadminEmail, { ...base, isInternal: true, staffName: "Super Admin" })
-                        .then(() => logEmailSent(req.user.id, { to: sadminEmail, subject: "New Subscription — SuperAdmin Notification", type: "SubscriptionSuperAdminNotice", targetId: subscription.customer, targetModel: "Customers", targetLabel: cust.name, ipAddress: req.ip }))
+                        .then(() => logEmailSent(req.user.id, { to: sadminEmail, subject: "New Subscription - SuperAdmin Notification", type: "SubscriptionSuperAdminNotice", targetId: subscription.customer, targetModel: "Customers", targetLabel: cust.name, ipAddress: req.ip }))
                         .catch(() => {})
                 }
             }).catch(() => {})
@@ -144,7 +138,6 @@ const updateSubscription = async (req, res) => {
     }
 }
 
-// Plan rule: cannot delete subscription that has paid invoices
 const deleteSubscription = async (req, res) => {
     try {
         const paidCount = await Invoices.countDocuments({ subscription: req.params.id, paymentStatus: "Paid" })
@@ -162,7 +155,6 @@ const deleteSubscription = async (req, res) => {
     }
 }
 
-// Renew: update dates, reset reminder flags, and auto-create a Renewal invoice
 const renewSubscription = async (req, res) => {
     try {
         const { renewalDate, amountCharged, paymentStatus = "Paid" } = req.body
