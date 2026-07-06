@@ -116,6 +116,7 @@ const io = new Server(server, {
 
 require("./socket/chatSocket")(io)
 
-server.listen(process.env.PORT, () => {
-  console.log("App Is Running On Port " + process.env.PORT)
+const port = process.env.PORT || 5000
+server.listen(port, () => {
+  console.log("App is running on port " + port)
 })

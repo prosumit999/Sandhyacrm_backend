@@ -1,10 +1,15 @@
 const mongoose = require("mongoose")
-const databaseConnection = async(req,res)=>{
-   try{
-    await mongoose.connect(process.env.MONGO_URI)
-    console.log("Database Is Connected:  " + mongoose.connection.name)
-   }catch(err){
-    console.log("These Was Err While Connecting To The Database:  " + err.message);
+const databaseConnection = async () => {
+   try {
+     const uri = process.env.MONGO_URI || "mongodb://127.0.0.1:27017/sandhya_crm"
+     await mongoose.connect(uri, {
+       useNewUrlParser: true,
+       useUnifiedTopology: true,
+     })
+     console.log("Database is connected:", mongoose.connection.name)
+   } catch (err) {
+     console.error("Error connecting to the database:", err.message)
+     process.exit(1)
    }
 }
 
