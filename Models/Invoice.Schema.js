@@ -92,7 +92,6 @@ const InvoiceSchema = mongoose.Schema(
 
 // Index for fast lookups by customer and payment status
 InvoiceSchema.index({ customer: 1, paymentStatus: 1 })
-InvoiceSchema.index({ invoiceNumber: 1 })
 
 const Invoices = mongoose.model("Invoices", InvoiceSchema)
 module.exports = Invoices

@@ -34,36 +34,34 @@ dotenv.config()
 app.use(express.json())
 app.use(express.urlencoded({ extended: true }))
 app.use(cookieParser())
-const allowedOrigins = (process.env.FRONTEND_URL || '')
+const defaultFrontendOrigins = process.env.NODE_ENV === "production"
+    ? []
+    : ["http://localhost:5173", "http://127.0.0.1:5173"]
+
+const allowedOrigins = [
+    ...defaultFrontendOrigins,
+    ...(process.env.FRONTEND_URL || '')
     .split(',')
     .map(o => o.trim())
-    .filter(Boolean)
-
-const devOriginPatterns = [
-    /^http:\/\/localhost:\d+$/,
-    /^http:\/\/127\.0\.0\.1:\d+$/,
-    /^http:\/\/10\.\d+\.\d+\.\d+:\d+$/,
-    /^http:\/\/172\.(1[6-9]|2\d|3[01])\.\d+\.\d+:\d+$/,
-    /^http:\/\/192\.168\.\d+\.\d+:\d+$/,
+    .filter(Boolean),
 ]
 
-const isAllowedOrigin = (origin) => {
-    if (!origin || allowedOrigins.includes(origin)) return true
-    if (process.env.NODE_ENV !== "production") {
-        return devOriginPatterns.some(pattern => pattern.test(origin))
-    }
-    return false
+const isAllowedOrigin = origin => Boolean(origin && allowedOrigins.includes(origin))
+
+const requireAllowedOrigin = (req, res, next) => {
+    if (isAllowedOrigin(req.get("origin"))) return next()
+    return res.status(403).json({ success: false, message: "Forbidden origin" })
 }
 
 app.use(cors({
     origin: (origin, cb) => {
-        // allow native/mobile clients (no origin) and any listed origin
         if (isAllowedOrigin(origin)) return cb(null, true)
         cb(new Error(`CORS: ${origin} not allowed`))
     },
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
 }))
+app.use(requireAllowedOrigin)
 
 databaseConnection()
 startJobs()
@@ -98,6 +96,9 @@ app.use((req, res) => {
 
 // Global error handler
 app.use((err, req, res, next) => {
+    if (err.message && err.message.startsWith("CORS:")) {
+        return res.status(403).json({ success: false, message: "Forbidden origin" })
+    }
     res.status(500).json({ success: false, message: err.message || "Internal Server Error" })
 })
 

@@ -101,7 +101,6 @@ const SupportTicketSchema = mongoose.Schema(
 SupportTicketSchema.index({ customer: 1, status: 1 })
 SupportTicketSchema.index({ software: 1, status: 1 })
 SupportTicketSchema.index({ assignedTo: 1, status: 1 })
-SupportTicketSchema.index({ ticketNumber: 1 })
 
 const SupportTickets = mongoose.model("SupportTickets", SupportTicketSchema)
 module.exports = SupportTickets
