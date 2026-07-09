@@ -5,9 +5,10 @@ const { getPaginationParams, buildPaginationMeta } = require("../Utils/paginatio
 const getAllAuditLogs = async (req, res) => {
     try {
         const { page, limit, skip } = getPaginationParams(req.query)
-        const { targetModel, action, performedBy, performedByEmail, category, severity, dateFrom, dateTo } = req.query
+        const { targetModel, targetId, action, performedBy, performedByEmail, category, severity, dateFrom, dateTo } = req.query
         const query = {}
         if (targetModel)       query.targetModel       = targetModel
+        if (targetId)          query.targetId          = targetId
         if (action)            query.action            = action
         if (performedBy)       query.performedBy       = performedBy
         if (performedByEmail)  query.performedByEmail  = { $regex: performedByEmail, $options: "i" }
@@ -29,6 +30,25 @@ const getAllAuditLogs = async (req, res) => {
         ])
 
         res.status(200).json({ success: true, message: "Audit logs fetched", data: logs, pagination: buildPaginationMeta(total, page, limit) })
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message })
+    }
+}
+
+const getTargetTimeline = async (req, res) => {
+    try {
+        const { targetModel, targetId, limit = 20 } = req.query
+        if (!targetModel || !targetId) {
+            return res.status(400).json({ success: false, message: "targetModel and targetId are required" })
+        }
+
+        const logs = await AuditLogs.find({ targetModel, targetId })
+            .populate("performedBy", "name email role")
+            .select("performedBy performedByEmail category action targetModel targetId targetLabel changedFields severity metadata ipAddress createdAt")
+            .sort({ createdAt: -1 })
+            .limit(Math.min(50, Math.max(1, Number(limit) || 20)))
+
+        res.status(200).json({ success: true, message: "Timeline fetched", data: logs })
     } catch (err) {
         res.status(500).json({ success: false, message: err.message })
     }
@@ -64,4 +84,4 @@ const getAuditStats = async (req, res) => {
     }
 }
 
-module.exports = { getAllAuditLogs, getAuditLogById, getAuditStats }
+module.exports = { getAllAuditLogs, getAuditLogById, getAuditStats, getTargetTimeline }

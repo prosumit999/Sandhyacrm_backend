@@ -7,6 +7,7 @@ const cookieParser = require("cookie-parser")
 const cors = require("cors")
 const databaseConnection = require("./config/db.config")
 const startJobs = require("./Cron/index")
+const auditLog = require("./Middlewares/audit.middleware")
 
 // Route imports
 const authRoute = require("./Routes/auth.route")
@@ -70,6 +71,7 @@ startJobs()
 app.get("/", (req, res) => res.send("Sandhya CRM API"))
 
 // API routes
+app.use("/api/v1", auditLog)
 app.use("/api/v1/auth", authRoute)
 app.use("/api/v1/users", userRoute)
 app.use("/api/v1/dashboard", dashboardRoute)

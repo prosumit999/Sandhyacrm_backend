@@ -1,3 +1,4 @@
+const jwt = require("jsonwebtoken")
 const { writeAuditLog, computeChangedFields } = require("../Services/auditlog.service")
 
 // Maps URL path segments to collection names
@@ -9,6 +10,7 @@ const PATH_TO_MODEL = {
     alerts:         "Alerts",
     communications: "Communications",
     tickets:        "SupportTickets",
+    tasks:          "Tasks",
     tags:           "Tags",
     users:          "Users",
 }
@@ -21,6 +23,7 @@ const MODEL_FILES = {
     invoices:      "../Models/Invoice.Schema",
     alerts:        "../Models/Alert.Schema",
     users:         "../Models/user.schema",
+    tasks:         "../Models/Task.schema",
 }
 const getModel = (resource) => {
     const file = MODEL_FILES[resource]
@@ -35,6 +38,9 @@ const MONGO_ID = /^[a-f\d]{24}$/i
 // For updates and deletes, pre-fetches the document so we can record before/after and changedFields.
 const auditLog = (req, res, next) => {
     if (!["POST", "PUT", "PATCH", "DELETE"].includes(req.method)) return next()
+    if (!req.user && req.cookies?.logintoken) {
+        try { req.user = jwt.verify(req.cookies.logintoken, process.env.JWT_SEC) } catch (_) {}
+    }
     if (!req.user) return next()
 
     const segments = req.path.replace(/^\/+/, "").split("/").filter(Boolean)

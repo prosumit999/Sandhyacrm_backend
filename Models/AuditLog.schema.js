@@ -42,7 +42,7 @@ const AuditLogSchema = mongoose.Schema(
             enum: [
                 "Customers", "Softwares", "Subscriptions", "Invoices", "Alerts",
                 "Communications", "SupportTickets", "Users", "Tags",
-                "Settings", "System",
+                "Settings", "Tasks", "System",
             ],
         },
         targetId: {
