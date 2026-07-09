@@ -22,6 +22,7 @@
   "scripts": {
     "dev": "nodemon server.js",
     "start": "node server.js",
+    "seed:reset": "node Seeds/reset-software.js",
     "test": "node --test tests/*.test.js"
   }
 }
