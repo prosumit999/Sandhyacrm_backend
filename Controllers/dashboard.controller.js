@@ -168,6 +168,78 @@ const getAlertSummary = async (req, res) => {
     }
 }
 
+const getOperationalAlerts = async (req, res) => {
+    try {
+        const now = new Date()
+        const thirtyDaysOut = addDays(now, 30)
+
+        const [
+            missingGithub,
+            expiringInfra,
+            unpaidInvoices,
+            slaTickets,
+        ] = await Promise.all([
+            Softwares.find({
+                $or: [
+                    { githubRepoUrl: { $exists: false } },
+                    { githubRepoUrl: null },
+                    { githubRepoUrl: "" },
+                ],
+            })
+                .populate("developer", "name email")
+                .select("name type status developer githubRepoUrl")
+                .sort({ updatedAt: -1 })
+                .limit(20),
+            Softwares.find({
+                $or: [
+                    { domainExpiryDate: { $gte: now, $lte: thirtyDaysOut } },
+                    { sslExpiryDate: { $gte: now, $lte: thirtyDaysOut } },
+                    { domainExpiryDate: { $lt: now } },
+                    { sslExpiryDate: { $lt: now } },
+                ],
+            })
+                .select("name type status domainExpiryDate sslExpiryDate liveUrl")
+                .sort({ domainExpiryDate: 1, sslExpiryDate: 1 })
+                .limit(20),
+            Invoices.find({ paymentStatus: { $in: ["Pending", "Overdue"] } })
+                .populate("customer", "name phone email")
+                .populate("software", "name")
+                .select("invoiceNumber customer software totalAmount paymentStatus periodTo createdAt")
+                .sort({ paymentStatus: -1, periodTo: 1, createdAt: 1 })
+                .limit(20),
+            SupportTickets.find({
+                status: { $in: ["Open", "InProgress"] },
+                dueBy: { $lte: now },
+            })
+                .populate("customer", "name phone email")
+                .populate("software", "name")
+                .populate("assignedTo", "name email")
+                .select("ticketNumber title priority status dueBy customer software assignedTo")
+                .sort({ dueBy: 1 })
+                .limit(20),
+        ])
+
+        res.status(200).json({
+            success: true,
+            message: "Operational alerts fetched",
+            data: {
+                summary: {
+                    missingGithub: missingGithub.length,
+                    expiringInfra: expiringInfra.length,
+                    unpaidInvoices: unpaidInvoices.length,
+                    slaTickets: slaTickets.length,
+                },
+                missingGithub,
+                expiringInfra,
+                unpaidInvoices,
+                slaTickets,
+            },
+        })
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message })
+    }
+}
+
 // Personal overview for a Standard user — their customers, renewals, overdue invoices, alerts
 const getMyOverview = async (req, res) => {
     try {
@@ -225,4 +297,4 @@ const getMyOverview = async (req, res) => {
     }
 }
 
-module.exports = { getKPIs, getUpcomingRenewals, getInfraAlerts, getSoftwareStatus, getRecentActivity, getAlertSummary, getMyOverview }
+module.exports = { getKPIs, getUpcomingRenewals, getInfraAlerts, getSoftwareStatus, getRecentActivity, getAlertSummary, getOperationalAlerts, getMyOverview }
