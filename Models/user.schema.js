@@ -21,6 +21,10 @@ const userSchema = mongoose.Schema({
         type: String, 
         trim: true, 
     },
+    githubProfileUrl:{
+        type: String,
+        trim: true,
+    },
     isActive:{
         type: Boolean, 
         default: true, 

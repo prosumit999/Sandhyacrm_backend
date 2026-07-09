@@ -45,14 +45,14 @@ const getUserById = async (req, res) => {
 
 const createUser = async (req, res) => {
     try {
-        const { name, email, password, phone, role, department } = req.body
+        const { name, email, password, phone, role, department, githubProfileUrl } = req.body
         if (!name || !email || !password || !phone) {
             return res.status(400).json({ success: false, message: "name, email, password, and phone are required" })
         }
 
         const salt = await bcryptjs.genSalt(10)
         const hashedPassword = await bcryptjs.hash(password, salt)
-        const user = new Users({ name, email, password: hashedPassword, phone, role, department })
+        const user = new Users({ name, email, password: hashedPassword, phone, role, department, githubProfileUrl })
         await user.save()
 
         writeAuditLog({ category: "Security", action: "UserCreated", performedBy: req.user.id, targetModel: "Users", targetId: user._id, targetLabel: user.email, severity: "info", metadata: { role: role || "Standard", createdByRole: req.user.role }, ipAddress: req.ip }).catch(() => {})

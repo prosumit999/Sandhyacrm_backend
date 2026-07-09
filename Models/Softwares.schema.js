@@ -45,6 +45,10 @@ const SoftwareSchema = mongoose.Schema(
       type: String,    
       trim: true,
     },
+    githubRepoUrl: {
+      type: String,
+      trim: true,
+    },
 
    
     hostingProvider: {
