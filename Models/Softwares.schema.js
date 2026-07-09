@@ -103,6 +103,26 @@ const SoftwareSchema = mongoose.Schema(
       type: String,
       trim: true,
     },
+    credentialVaultUrl: {
+      type: String,
+      trim: true,
+    },
+    hostingLoginRef: {
+      type: String,
+      trim: true,
+    },
+    domainLoginRef: {
+      type: String,
+      trim: true,
+    },
+    cloudConsoleRef: {
+      type: String,
+      trim: true,
+    },
+    credentialNotes: {
+      type: String,
+      trim: true,
+    },
 
     developer: {
       type: mongoose.Schema.Types.ObjectId,
