@@ -76,6 +76,17 @@ const InvoiceSchema = mongoose.Schema(
       type: String,         // UPI ref, bank UTR, etc.
       trim: true,
     },
+    customerPaymentReference: {
+      type: String,
+      trim: true,
+    },
+    customerPaymentNote: {
+      type: String,
+      trim: true,
+    },
+    customerPaymentSubmittedAt: {
+      type: Date,
+    },
     notes: {
       type: String,
       trim: true,

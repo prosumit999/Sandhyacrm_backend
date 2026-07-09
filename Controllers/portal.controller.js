@@ -110,7 +110,7 @@ const portalDashboard = async (req, res) => {
 const portalSubscriptions = async (req, res) => {
   try {
     const subs = await Subscriptions.find({ customer: req.customer.id })
-      .populate("softwares", "name type liveUrl status")
+      .populate("softwares", "name type description liveUrl playStoreUrl appStoreUrl downloadUrl documentationUrl status")
       .sort({ status: 1, renewalDate: 1 })
     res.json({ success: true, data: subs })
   } catch (err) {
@@ -126,6 +126,37 @@ const portalInvoices = async (req, res) => {
       .populate("software", "name type")
       .sort({ createdAt: -1 })
     res.json({ success: true, data: invs })
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message })
+  }
+}
+
+const portalSubmitPaymentReference = async (req, res) => {
+  try {
+    const { reference, note } = req.body
+    if (!reference?.trim()) {
+      return res.status(400).json({ success: false, message: "Payment reference is required" })
+    }
+
+    const invoice = await Invoices.findOneAndUpdate(
+      {
+        _id: req.params.id,
+        customer: req.customer.id,
+        paymentStatus: { $in: ["Pending", "Overdue"] },
+      },
+      {
+        customerPaymentReference: reference.trim(),
+        customerPaymentNote: (note || "").trim(),
+        customerPaymentSubmittedAt: new Date(),
+      },
+      { new: true, runValidators: true }
+    ).populate("software", "name type")
+
+    if (!invoice) {
+      return res.status(404).json({ success: false, message: "Invoice not found or already paid" })
+    }
+
+    res.json({ success: true, message: "Payment reference submitted", data: invoice })
   } catch (err) {
     res.status(500).json({ success: false, message: err.message })
   }
@@ -197,6 +228,7 @@ const portalTicketDetail = async (req, res) => {
     const ticket = await SupportTickets.findOne({ _id: req.params.id, customer: req.customer.id })
       .populate("software", "name type")
       .populate("assignedTo", "name email role ProfilePhoto")
+      .populate("resolvedBy", "name role ProfilePhoto")
       .populate("replies.sentBy", "name role ProfilePhoto")
       .populate("replies.customerRef", "name")
     if (!ticket)
@@ -486,13 +518,25 @@ const adminGetPortalMessages = async (req, res) => {
 
 const portalUpdateMe = async (req, res) => {
   try {
-    const { name, phone } = req.body
+    const { name, phone, whatsapp, businessName, address = {} } = req.body
     if (!name?.trim())
       return res.status(400).json({ success: false, message: "Name is required" })
 
+    const update = {
+      name: name.trim(),
+      phone: (phone || "").trim(),
+      whatsapp: (whatsapp || "").trim(),
+      businessName: (businessName || "").trim(),
+      address: {
+        city: (address.city || "").trim(),
+        state: (address.state || "").trim(),
+        country: (address.country || "India").trim(),
+      },
+    }
+
     const customer = await Customers.findByIdAndUpdate(
       req.customer.id,
-      { name: name.trim(), phone: (phone || "").trim() },
+      update,
       { new: true, runValidators: true }
     ).select("-portalPassword -portalResetToken -portalResetExpires")
 
@@ -542,6 +586,7 @@ module.exports = {
   portalDashboard,
   portalSubscriptions,
   portalInvoices,
+  portalSubmitPaymentReference,
   portalAlerts,
   portalTickets,
   portalCreateTicket,

@@ -11,6 +11,7 @@ const {
   portalDashboard,
   portalSubscriptions,
   portalInvoices,
+  portalSubmitPaymentReference,
   portalAlerts,
   portalTickets,
   portalCreateTicket,
@@ -69,6 +70,7 @@ router.put("/auth/change-password",verifyPortalCustomer, portalChangePassword)
 router.get("/dashboard",      verifyPortalCustomer, portalDashboard)
 router.get("/subscriptions",  verifyPortalCustomer, portalSubscriptions)
 router.get("/invoices",       verifyPortalCustomer, portalInvoices)
+router.post("/invoices/:id/payment-reference", verifyPortalCustomer, portalSubmitPaymentReference)
 router.get("/alerts",         verifyPortalCustomer, portalAlerts)
 router.get("/tickets",        verifyPortalCustomer, portalTickets)
 router.post("/tickets",       verifyPortalCustomer, portalCreateTicket)
