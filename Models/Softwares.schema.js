@@ -87,6 +87,22 @@ const SoftwareSchema = mongoose.Schema(
       type: [String],      // e.g. ["React", "Node.js", "MongoDB"]
       default: [],
     },
+    documentationUrl: {
+      type: String,
+      trim: true,
+    },
+    setupCommand: {
+      type: String,
+      trim: true,
+    },
+    envNotes: {
+      type: String,
+      trim: true,
+    },
+    deploymentNotes: {
+      type: String,
+      trim: true,
+    },
 
     developer: {
       type: mongoose.Schema.Types.ObjectId,
