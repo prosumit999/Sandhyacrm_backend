@@ -28,6 +28,7 @@ const socialRoute   = require("./Routes/social.route")
 const teamRoute     = require("./Routes/team.route")
 const chatRoute     = require("./Routes/chat.route")
 const portalRoute   = require("./Routes/portal.route")
+const taskRoute     = require("./Routes/task.route")
 
 dotenv.config()
 
@@ -88,6 +89,7 @@ app.use("/api/v1/social",   socialRoute)
 app.use("/api/v1/teams",    teamRoute)
 app.use("/api/v1/chat",     chatRoute)
 app.use("/api/v1/portal",   portalRoute)
+app.use("/api/v1/tasks",    taskRoute)
 
 // Global 404 handler
 app.use((req, res) => {
