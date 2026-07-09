@@ -123,6 +123,26 @@ const SoftwareSchema = mongoose.Schema(
       type: String,
       trim: true,
     },
+    deploymentPlatform: {
+      type: String,
+      trim: true,
+    },
+    deploymentBranch: {
+      type: String,
+      trim: true,
+    },
+    deploymentUrl: {
+      type: String,
+      trim: true,
+    },
+    buildStatus: {
+      type: String,
+      enum: ["Unknown", "Passing", "Failed", "Pending", "NotConfigured"],
+      default: "Unknown",
+    },
+    lastDeployedAt: {
+      type: Date,
+    },
 
     developer: {
       type: mongoose.Schema.Types.ObjectId,
